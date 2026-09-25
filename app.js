@@ -1,10 +1,29 @@
+/* =========================================================
+   MI CALENDARIO PERSONAL
+   Versión limpia y compatible con iPhone / Safari
+   ========================================================= */
+
 const STORAGE_KEY = "mi_calendario_personal_clean_v1";
 const NOTES_KEY = "mi_calendario_personal_notes_v1";
 
 let selectedDate = todayString();
 let currentFilter = "today";
-let calendarMonth = new Date();
-let browseMonth = new Date();
+
+let calendarMonth = new Date(
+  new Date().getFullYear(),
+  new Date().getMonth(),
+  1
+);
+
+let browseMonth = new Date(
+  new Date().getFullYear(),
+  new Date().getMonth(),
+  1
+);
+
+/* =========================================================
+   UTILIDADES
+   ========================================================= */
 
 const $ = id => document.getElementById(id);
 
@@ -13,11 +32,17 @@ function todayString() {
 }
 
 function formatDate(d) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return (
+    d.getFullYear() +
+    "-" +
+    String(d.getMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(d.getDate()).padStart(2, "0")
+  );
 }
 
 function dateFromString(s) {
-  const [y, m, d] = s.split("-").map(Number);
+  const [y, m, d] = String(s).split("-").map(Number);
   return new Date(y, m - 1, d);
 }
 
@@ -35,22 +60,6 @@ function dateText(s) {
   });
 }
 
-function load() {
-  return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-}
-
-function save(a) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(a));
-}
-
-function loadNotes() {
-  return JSON.parse(localStorage.getItem(NOTES_KEY) || "[]");
-}
-
-function saveNotes(a) {
-  localStorage.setItem(NOTES_KEY, JSON.stringify(a));
-}
-
 function esc(v) {
   return String(v).replace(/[&<>"']/g, c => ({
     "&": "&amp;",
@@ -61,12 +70,50 @@ function esc(v) {
   }[c]));
 }
 
-/* =========================
-   PENDIENTES
-========================= */
+/* =========================================================
+   LOCAL STORAGE
+   ========================================================= */
+
+function load() {
+  try {
+    return JSON.parse(
+      localStorage.getItem(STORAGE_KEY) || "[]"
+    );
+  } catch {
+    return [];
+  }
+}
+
+function save(data) {
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify(data)
+  );
+}
+
+function loadNotes() {
+  try {
+    return JSON.parse(
+      localStorage.getItem(NOTES_KEY) || "[]"
+    );
+  } catch {
+    return [];
+  }
+}
+
+function saveNotes(data) {
+  localStorage.setItem(
+    NOTES_KEY,
+    JSON.stringify(data)
+  );
+}
+
+/* =========================================================
+   DATOS INICIALES
+   ========================================================= */
 
 function seed() {
-  if (load().length) return;
+  if (load().length > 0) return;
 
   const d = todayString();
 
@@ -118,67 +165,96 @@ function seed() {
   ]);
 }
 
+/* =========================================================
+   REPETICIONES
+   ========================================================= */
+
 function occurrenceDates(task, from, to) {
-  const out = [];
+  const result = [];
+
   const start = dateFromString(task.date);
   const end = dateFromString(to);
+
   let d = new Date(start);
 
   while (d <= end) {
-    const s = formatDate(d);
+    const current = formatDate(d);
 
-    if (s >= from) {
-      const daysSince = Math.round((d - start) / 86400000);
+    if (current >= from) {
+      const daysSince = Math.round(
+        (d - start) / 86400000
+      );
+
       const weekday = d.getDay();
 
-      const ok =
+      const valid =
         task.repeat === "daily" ||
-        (task.repeat === "weekdays" && weekday >= 1 && weekday <= 5) ||
-        (task.repeat === "weekly" && daysSince % 7 === 0) ||
+        (
+          task.repeat === "weekdays" &&
+          weekday >= 1 &&
+          weekday <= 5
+        ) ||
+        (
+          task.repeat === "weekly" &&
+          daysSince % 7 === 0
+        ) ||
         task.repeat === "once";
 
-      if (ok) out.push(s);
+      if (valid) {
+        result.push(current);
+      }
     }
 
-    if (task.repeat === "once") break;
+    if (task.repeat === "once") {
+      break;
+    }
 
     d.setDate(d.getDate() + 1);
   }
 
-  return out;
+  return result;
 }
 
 function expandTasks() {
   const base = load();
   const result = [];
 
-  const rangeStart =
-    currentFilter === "past"
-      ? "2000-01-01"
-      : currentFilter === "future"
-      ? todayString()
-      : selectedDate;
+  let rangeStart;
+  let rangeEnd;
 
-  const rangeEnd =
-    currentFilter === "past"
-      ? todayString()
-      : currentFilter === "future"
-      ? "2035-12-31"
-      : selectedDate;
+  if (currentFilter === "past") {
+    rangeStart = "2000-01-01";
+    rangeEnd = todayString();
+  } else if (currentFilter === "future") {
+    rangeStart = todayString();
+    rangeEnd = "2035-12-31";
+  } else {
+    rangeStart = selectedDate;
+    rangeEnd = selectedDate;
+  }
 
   base.forEach(task => {
-    const dates = occurrenceDates(task, rangeStart, rangeEnd);
+    const dates = occurrenceDates(
+      task,
+      rangeStart,
+      rangeEnd
+    );
 
     dates.forEach(date => {
-      const occurrenceId = `${task.id}_${date}`;
-      const stored = localStorage.getItem("status_" + occurrenceId);
+      const occurrenceId =
+        task.id + "_" + date;
+
+      const storedStatus =
+        localStorage.getItem(
+          "status_" + occurrenceId
+        );
 
       result.push({
         ...task,
         pinned: !!task.pinned,
         occurrenceId,
         date,
-        status: stored || task.status
+        status: storedStatus || task.status
       });
     });
   });
@@ -186,99 +262,25 @@ function expandTasks() {
   return result;
 }
 
-/* =========================
-   IMPORTANTES
-========================= */
-
-function renderPriority() {
-  const container = $("priorityList");
-  if (!container) return;
-
-  const tasks = load().filter(t => t.pinned);
-  const notes = loadNotes().filter(n => n.pinned);
-
-  if (!tasks.length && !notes.length) {
-    container.innerHTML =
-      '<div class="empty">Todavía no tienes nada pineado.</div>';
-    return;
-  }
-
-  let html = "";
-
-  tasks.forEach(task => {
-    html += `
-      <article class="task pinned-task"
-        data-priority-task="${task.id}">
-        <div class="task-time">${esc(task.time)}</div>
-        <div class="task-state">📌</div>
-        <div class="task-body">
-          <div class="task-title">${esc(task.title)}</div>
-          <div class="task-meta">
-            ${esc(dateText(task.date))}
-          </div>
-        </div>
-      </article>
-    `;
-  });
-
-  notes.forEach(note => {
-    html += `
-      <article class="task pinned-note"
-        data-priority-note="${note.id}">
-        <div class="task-time">📌</div>
-        <div class="task-state">📝</div>
-        <div class="task-body">
-          <div class="task-title">${esc(note.title)}</div>
-          <div class="task-meta">Nota importante</div>
-        </div>
-      </article>
-    `;
-  });
-
-  container.innerHTML = html;
-
-  container.querySelectorAll("[data-priority-task]").forEach(el => {
-    el.onclick = () => {
-      const id = el.dataset.priorityTask;
-      const task = load().find(t => t.id === id);
-
-      if (task) {
-        selectedDate = task.date;
-        currentFilter = "today";
-        render();
-        openTask(task.id, task.date);
-      }
-    };
-  });
-
-  container.querySelectorAll("[data-priority-note]").forEach(el => {
-    el.onclick = () => {
-      const note = loadNotes().find(
-        n => n.id === el.dataset.priorityNote
-      );
-
-      if (note) openNoteDetail(note);
-    };
-  });
-}
-
-/* =========================
-   RENDER PENDIENTES
-========================= */
+/* =========================================================
+   RENDER PRINCIPAL
+   ========================================================= */
 
 function render() {
-  $("currentDate").textContent = dateText(selectedDate);
+  $("currentDate").textContent =
+    dateText(selectedDate);
+
   $("currentYear").textContent =
     dateFromString(selectedDate).getFullYear();
 
   document
     .querySelectorAll(".filter[data-filter]")
-    .forEach(b =>
-      b.classList.toggle(
+    .forEach(button => {
+      button.classList.toggle(
         "active",
-        b.dataset.filter === currentFilter
-      )
-    );
+        button.dataset.filter === currentFilter
+      );
+    });
 
   renderPriority();
   renderNotes();
@@ -286,20 +288,26 @@ function render() {
   let tasks = expandTasks();
 
   if (currentFilter === "today") {
-    tasks = tasks.filter(t => t.date === selectedDate);
+    tasks = tasks.filter(
+      task => task.date === selectedDate
+    );
   }
 
   if (currentFilter === "future") {
-    tasks = tasks.filter(t => t.date > todayString());
+    tasks = tasks.filter(
+      task => task.date > todayString()
+    );
   }
 
   if (currentFilter === "past") {
-    tasks = tasks.filter(t => t.date < todayString());
+    tasks = tasks.filter(
+      task => task.date < todayString()
+    );
   }
 
   tasks.sort((a, b) => {
     if (a.pinned !== b.pinned) {
-      return b.pinned ? 1 : -1;
+      return a.pinned ? -1 : 1;
     }
 
     return (
@@ -317,107 +325,286 @@ function render() {
       ? "PASADOS"
       : "TODAS LAS FECHAS";
 
-  $("taskCount").textContent = tasks.length;
+  $("taskCount").textContent =
+    tasks.length;
 
   if (!tasks.length) {
     $("taskList").innerHTML =
-      '<div class="empty">No hay pendientes aquí.<br><br>Agrega uno con el botón de abajo.</div>';
+      '<div class="empty">' +
+      'No hay pendientes aquí.<br><br>' +
+      'Agrega uno con el botón de abajo.' +
+      '</div>';
+
     return;
   }
 
-  $("taskList").innerHTML = tasks.map(t => {
-    const symbol =
-      t.status === "done"
-        ? "✓"
-        : t.status === "notdone"
-        ? "×"
-        : "◷";
+  $("taskList").innerHTML = tasks
+    .map(task => {
+      const symbol =
+        task.status === "done"
+          ? "✓"
+          : task.status === "notdone"
+          ? "×"
+          : "◷";
 
-    const repeat =
-      t.repeat !== "once" ? "↻ " : "";
+      const repeat =
+        task.repeat !== "once"
+          ? "↻ "
+          : "";
 
-    const pin = t.pinned ? " 📌" : "";
+      const pin =
+        task.pinned
+          ? " 📌"
+          : "";
 
-    return `
+      let reminderText;
+
+      if (task.reminder === "none") {
+        reminderText = "sin aviso";
+      } else if (task.reminder === "0") {
+        reminderText = "solo a la hora";
+      } else {
+        reminderText =
+          task.reminder +
+          " min antes";
+      }
+
+      return `
+        <article
+          class="task ${esc(task.status)}"
+          data-id="${esc(task.id)}"
+          data-date="${esc(task.date)}"
+        >
+          <div class="task-time">
+            ${esc(task.time)}
+          </div>
+
+          <div class="task-state">
+            ${symbol}
+          </div>
+
+          <div class="task-body">
+            <div class="task-title">
+              ${esc(task.title)}${pin}
+            </div>
+
+            <div class="task-meta">
+              ${
+                currentFilter !== "today"
+                  ? esc(dateText(task.date)) + " · "
+                  : ""
+              }
+              ${repeat}
+              ${reminderText}
+            </div>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+
+  document
+    .querySelectorAll(".task[data-id]")
+    .forEach(element => {
+      element.onclick = () => {
+        openTask(
+          element.dataset.id,
+          element.dataset.date
+        );
+      };
+    });
+}
+
+/* =========================================================
+   IMPORTANTES / PINEADOS
+   ========================================================= */
+
+function renderPriority() {
+  const container =
+    $("priorityList");
+
+  if (!container) return;
+
+  const tasks =
+    load().filter(task => task.pinned);
+
+  const notes =
+    loadNotes().filter(note => note.pinned);
+
+  if (!tasks.length && !notes.length) {
+    container.innerHTML =
+      '<div class="empty">' +
+      'Todavía no tienes nada pineado.' +
+      '</div>';
+
+    return;
+  }
+
+  let html = "";
+
+  tasks.forEach(task => {
+    html += `
       <article
-        class="task ${t.status}"
-        data-id="${t.id}"
-        data-date="${t.date}"
+        class="task pinned-task"
+        data-priority-task="${esc(task.id)}"
       >
-        <div class="task-time">${esc(t.time)}</div>
-        <div class="task-state">${symbol}</div>
+        <div class="task-time">
+          ${esc(task.time)}
+        </div>
+
+        <div class="task-state">
+          📌
+        </div>
 
         <div class="task-body">
           <div class="task-title">
-            ${esc(t.title)}${pin}
+            ${esc(task.title)}
           </div>
 
           <div class="task-meta">
-            ${
-              currentFilter !== "today"
-                ? esc(dateText(t.date)) + " · "
-                : ""
-            }
-            ${repeat}
-            ${
-              t.reminder === "10"
-                ? "10 min antes"
-                : t.reminder === "none"
-                ? "sin aviso"
-                : t.reminder + " min antes"
-            }
+            ${esc(dateText(task.date))}
           </div>
         </div>
       </article>
     `;
-  }).join("");
-
-  document.querySelectorAll(".task[data-id]").forEach(el => {
-    el.onclick = () =>
-      openTask(el.dataset.id, el.dataset.date);
   });
+
+  notes.forEach(note => {
+    html += `
+      <article
+        class="task pinned-note"
+        data-priority-note="${esc(note.id)}"
+      >
+        <div class="task-time">
+          📌
+        </div>
+
+        <div class="task-state">
+          📝
+        </div>
+
+        <div class="task-body">
+          <div class="task-title">
+            ${esc(note.title)}
+          </div>
+
+          <div class="task-meta">
+            Nota importante
+          </div>
+        </div>
+      </article>
+    `;
+  });
+
+  container.innerHTML = html;
+
+  container
+    .querySelectorAll("[data-priority-task]")
+    .forEach(element => {
+      element.onclick = () => {
+        const task = load().find(
+          item =>
+            item.id ===
+            element.dataset.priorityTask
+        );
+
+        if (!task) return;
+
+        selectedDate = task.date;
+        currentFilter = "today";
+
+        render();
+
+        openTask(
+          task.id,
+          task.date
+        );
+      };
+    });
+
+  container
+    .querySelectorAll("[data-priority-note]")
+    .forEach(element => {
+      element.onclick = () => {
+        const note = loadNotes().find(
+          item =>
+            item.id ===
+            element.dataset.priorityNote
+        );
+
+        if (note) {
+          openNoteDetail(note);
+        }
+      };
+    });
 }
 
-/* =========================
-   CALENDARIO PARA AGREGAR
-   CORREGIDO PARA IPHONE
-========================= */
+/* =========================================================
+   CALENDARIO PARA AGREGAR PENDIENTE
+   ========================================================= */
 
 function renderCalendar() {
-  const c = $("calendarPicker");
-  if (!c) return;
+  const container =
+    $("calendarPicker");
 
-  const selectedInput = $("taskDate");
+  const dateInput =
+    $("taskDate");
 
-  const selectedValue =
-    selectedInput &&
-    /^\d{4}-\d{2}-\d{2}$/.test(selectedInput.value)
-      ? selectedInput.value
-      : todayString();
+  if (!container || !dateInput) {
+    return;
+  }
 
-  const y = calendarMonth.getFullYear();
-  const m = calendarMonth.getMonth();
+  /* Siempre mantenemos calendarMonth en el día 1 */
+  calendarMonth = new Date(
+    calendarMonth.getFullYear(),
+    calendarMonth.getMonth(),
+    1
+  );
 
-  const first = new Date(y, m, 1);
-  const start = (first.getDay() + 6) % 7;
-  const total = new Date(y, m + 1, 0).getDate();
-  const prevTotal = new Date(y, m, 0).getDate();
+  const year =
+    calendarMonth.getFullYear();
 
-  let h = `
+  const month =
+    calendarMonth.getMonth();
+
+  const firstDay =
+    new Date(year, month, 1);
+
+  const start =
+    (firstDay.getDay() + 6) % 7;
+
+  const totalDays =
+    new Date(
+      year,
+      month + 1,
+      0
+    ).getDate();
+
+  const previousMonthDays =
+    new Date(
+      year,
+      month,
+      0
+    ).getDate();
+
+  let html = `
     <div class="calendar-head">
 
       <strong>
-        ${calendarMonth.toLocaleDateString("es-PE", {
-          month: "long",
-          year: "numeric"
-        })}
+        ${calendarMonth.toLocaleDateString(
+          "es-PE",
+          {
+            month: "long",
+            year: "numeric"
+          }
+        )}
       </strong>
 
       <div class="calendar-nav">
 
         <button
           type="button"
-          data-calendar-action="prev"
+          id="taskCalendarPrev"
           aria-label="Mes anterior"
         >
           ‹
@@ -425,18 +612,29 @@ function renderCalendar() {
 
         <button
           type="button"
-          data-calendar-action="next"
+          id="taskCalendarNext"
           aria-label="Mes siguiente"
         >
           ›
         </button>
 
       </div>
+
     </div>
 
     <div class="calendar-week">
-      ${["L","M","M","J","V","S","D"]
-        .map(x => `<span>${x}</span>`)
+      ${[
+        "L",
+        "M",
+        "M",
+        "J",
+        "V",
+        "S",
+        "D"
+      ]
+        .map(day =>
+          `<span>${day}</span>`
+        )
         .join("")}
     </div>
 
@@ -444,196 +642,202 @@ function renderCalendar() {
   `;
 
   for (let i = 0; i < 42; i++) {
+    const number =
+      i - start + 1;
 
-    const n = i - start + 1;
+    let date;
 
-    let dt;
-
-    if (n < 1) {
-      dt = new Date(
-        y,
-        m - 1,
-        prevTotal + n
+    if (number < 1) {
+      date = new Date(
+        year,
+        month - 1,
+        previousMonthDays + number
       );
-    } else if (n > total) {
-      dt = new Date(
-        y,
-        m + 1,
-        n - total
+    } else if (
+      number > totalDays
+    ) {
+      date = new Date(
+        year,
+        month + 1,
+        number - totalDays
       );
     } else {
-      dt = new Date(
-        y,
-        m,
-        n
+      date = new Date(
+        year,
+        month,
+        number
       );
     }
 
-    const ds = formatDate(dt);
+    const dateString =
+      formatDate(date);
 
-    const muted =
-      dt.getMonth() !== m;
+    const isMuted =
+      date.getMonth() !== month;
+
+    const isSelected =
+      dateString === dateInput.value;
 
     const isToday =
-      ds === todayString();
+      dateString === todayString();
 
-    const selected =
-      ds === selectedValue;
-
-    h += `
+    html += `
       <button
         type="button"
-        class="calendar-day
-          ${muted ? "muted" : ""}
-          ${selected ? "selected" : ""}
-          ${isToday ? "today" : ""}"
-        data-calendar-date="${ds}"
-        aria-label="Seleccionar ${ds}"
+        class="calendar-day ${
+          isMuted ? "muted" : ""
+        } ${
+          isSelected ? "selected" : ""
+        } ${
+          isToday ? "today" : ""
+        }"
+        data-task-date="${dateString}"
+        aria-label="${dateString}"
       >
-        ${dt.getDate()}
+        ${date.getDate()}
       </button>
     `;
   }
 
-  h += "</div>";
+  html += "</div>";
 
-  c.innerHTML = h;
+  container.innerHTML = html;
 
-  /*
-    IMPORTANTE PARA IPHONE:
+  /* -------------------------------------------------------
+     IMPORTANTE PARA IPHONE:
+     Eventos directos en los botones.
+     No usamos event.target.closest().
+     ------------------------------------------------------- */
 
-    En vez de asignar onclick a cada botón
-    después de dibujar el calendario, usamos
-    un único evento en el contenedor.
+  const previousButton =
+    $("taskCalendarPrev");
 
-    Además bloqueamos el comportamiento
-    predeterminado del formulario.
-  */
+  const nextButton =
+    $("taskCalendarNext");
 
-  c.onclick = e => {
+  if (previousButton) {
+    previousButton.onclick = function(event) {
+      event.preventDefault();
 
-    const button =
-      e.target.closest("button");
-
-    if (!button || !c.contains(button)) {
-      return;
-    }
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    const action =
-      button.dataset.calendarAction;
-
-    /* MES ANTERIOR */
-
-    if (action === "prev") {
-
-      calendarMonth =
-        new Date(
-          y,
-          m - 1,
-          1
-        );
-
-      renderCalendar();
-
-      return;
-    }
-
-    /* MES SIGUIENTE */
-
-    if (action === "next") {
-
-      calendarMonth =
-        new Date(
-          y,
-          m + 1,
-          1
-        );
-
-      renderCalendar();
-
-      return;
-    }
-
-    /* SELECCIONAR FECHA */
-
-    const date =
-      button.dataset.calendarDate;
-
-    if (!date) {
-      return;
-    }
-
-    $("taskDate").value = date;
-
-    const d =
-      dateFromString(date);
-
-    calendarMonth =
-      new Date(
-        d.getFullYear(),
-        d.getMonth(),
+      calendarMonth = new Date(
+        calendarMonth.getFullYear(),
+        calendarMonth.getMonth() - 1,
         1
       );
 
-    renderCalendar();
-  };
+      renderCalendar();
+    };
+  }
+
+  if (nextButton) {
+    nextButton.onclick = function(event) {
+      event.preventDefault();
+
+      calendarMonth = new Date(
+        calendarMonth.getFullYear(),
+        calendarMonth.getMonth() + 1,
+        1
+      );
+
+      renderCalendar();
+    };
+  }
+
+  container
+    .querySelectorAll("[data-task-date]")
+    .forEach(button => {
+
+      button.onclick = function(event) {
+        event.preventDefault();
+
+        const chosenDate =
+          button.dataset.taskDate;
+
+        dateInput.value =
+          chosenDate;
+
+        const chosen =
+          dateFromString(chosenDate);
+
+        calendarMonth = new Date(
+          chosen.getFullYear(),
+          chosen.getMonth(),
+          1
+        );
+
+        renderCalendar();
+      };
+
+    });
 }
 
-/* =========================
-   MINI CALENDARIO DE FILTRO
-========================= */
+/* =========================================================
+   CALENDARIO PRINCIPAL
+   ========================================================= */
 
 function renderBrowseCalendar() {
+  const container =
+    $("browseCalendar");
 
-  const c = $("browseCalendar");
+  if (!container) return;
 
-  if (!c) return;
+  browseMonth = new Date(
+    browseMonth.getFullYear(),
+    browseMonth.getMonth(),
+    1
+  );
 
-  const y =
+  const year =
     browseMonth.getFullYear();
 
-  const m =
+  const month =
     browseMonth.getMonth();
 
-  const first =
-    new Date(y, m, 1);
+  const firstDay =
+    new Date(year, month, 1);
 
   const start =
-    (first.getDay() + 6) % 7;
+    (firstDay.getDay() + 6) % 7;
 
-  const total =
-    new Date(y, m + 1, 0).getDate();
+  const totalDays =
+    new Date(
+      year,
+      month + 1,
+      0
+    ).getDate();
 
-  const prevTotal =
-    new Date(y, m, 0).getDate();
+  const previousMonthDays =
+    new Date(
+      year,
+      month,
+      0
+    ).getDate();
 
-  let h = `
+  let html = `
     <div class="calendar-head">
 
       <strong>
-        ${browseMonth.toLocaleDateString("es-PE", {
-          month: "long",
-          year: "numeric"
-        })}
+        ${browseMonth.toLocaleDateString(
+          "es-PE",
+          {
+            month: "long",
+            year: "numeric"
+          }
+        )}
       </strong>
 
       <div class="calendar-nav">
 
         <button
           type="button"
-          data-browse-action="prev"
-          aria-label="Mes anterior"
+          id="browsePrev"
         >
           ‹
         </button>
 
         <button
           type="button"
-          data-browse-action="next"
-          aria-label="Mes siguiente"
+          id="browseNext"
         >
           ›
         </button>
@@ -642,8 +846,18 @@ function renderBrowseCalendar() {
     </div>
 
     <div class="calendar-week">
-      ${["L","M","M","J","V","S","D"]
-        .map(x => `<span>${x}</span>`)
+      ${[
+        "L",
+        "M",
+        "M",
+        "J",
+        "V",
+        "S",
+        "D"
+      ]
+        .map(day =>
+          `<span>${day}</span>`
+        )
         .join("")}
     </div>
 
@@ -651,147 +865,227 @@ function renderBrowseCalendar() {
   `;
 
   for (let i = 0; i < 42; i++) {
-
-    const n =
+    const number =
       i - start + 1;
 
-    let dt;
+    let date;
 
-    if (n < 1) {
-
-      dt =
-        new Date(
-          y,
-          m - 1,
-          prevTotal + n
-        );
-
-    } else if (n > total) {
-
-      dt =
-        new Date(
-          y,
-          m + 1,
-          n - total
-        );
-
+    if (number < 1) {
+      date = new Date(
+        year,
+        month - 1,
+        previousMonthDays + number
+      );
+    } else if (
+      number > totalDays
+    ) {
+      date = new Date(
+        year,
+        month + 1,
+        number - totalDays
+      );
     } else {
-
-      dt =
-        new Date(
-          y,
-          m,
-          n
-        );
+      date = new Date(
+        year,
+        month,
+        number
+      );
     }
 
-    const ds =
-      formatDate(dt);
+    const dateString =
+      formatDate(date);
 
-    h += `
+    html += `
       <button
         type="button"
-        class="calendar-day
-          ${dt.getMonth() !== m ? "muted" : ""}
-          ${ds === selectedDate ? "selected" : ""}
-          ${ds === todayString() ? "today" : ""}"
-        data-browse-date="${ds}"
+        class="calendar-day ${
+          date.getMonth() !== month
+            ? "muted"
+            : ""
+        } ${
+          dateString === selectedDate
+            ? "selected"
+            : ""
+        } ${
+          dateString === todayString()
+            ? "today"
+            : ""
+        }"
+        data-browse-date="${dateString}"
       >
-        ${dt.getDate()}
+        ${date.getDate()}
       </button>
     `;
   }
 
-  h += "</div>";
+  html += "</div>";
 
-  c.innerHTML = h;
+  container.innerHTML = html;
 
-  c.onclick = e => {
+  const previous =
+    $("browsePrev");
 
-    const button =
-      e.target.closest("button");
+  const next =
+    $("browseNext");
 
-    if (!button || !c.contains(button)) {
-      return;
-    }
+  if (previous) {
+    previous.onclick = function(event) {
+      event.preventDefault();
 
-    e.preventDefault();
-    e.stopPropagation();
-
-    const action =
-      button.dataset.browseAction;
-
-    if (action === "prev") {
-
-      browseMonth =
-        new Date(
-          y,
-          m - 1,
-          1
-        );
+      browseMonth = new Date(
+        browseMonth.getFullYear(),
+        browseMonth.getMonth() - 1,
+        1
+      );
 
       renderBrowseCalendar();
+    };
+  }
 
-      return;
-    }
+  if (next) {
+    next.onclick = function(event) {
+      event.preventDefault();
 
-    if (action === "next") {
-
-      browseMonth =
-        new Date(
-          y,
-          m + 1,
-          1
-        );
+      browseMonth = new Date(
+        browseMonth.getFullYear(),
+        browseMonth.getMonth() + 1,
+        1
+      );
 
       renderBrowseCalendar();
+    };
+  }
 
-      return;
-    }
+  container
+    .querySelectorAll("[data-browse-date]")
+    .forEach(button => {
+
+      button.onclick = function(event) {
+        event.preventDefault();
+
+        selectedDate =
+          button.dataset.browseDate;
+
+        currentFilter = "today";
+
+        $("calendarDialog").close();
+
+        render();
+      };
+
+    });
+}
+
+/* =========================================================
+   AGREGAR PENDIENTE
+   ========================================================= */
+
+$("addBtn").onclick = function() {
+
+  $("taskForm").reset();
+
+  $("taskDate").value =
+    selectedDate;
+
+  const selected =
+    dateFromString(selectedDate);
+
+  calendarMonth = new Date(
+    selected.getFullYear(),
+    selected.getMonth(),
+    1
+  );
+
+  renderCalendar();
+
+  $("taskDialog").showModal();
+};
+
+$("closeDialog").onclick =
+  function() {
+    $("taskDialog").close();
+  };
+
+$("taskForm").onsubmit =
+  function(event) {
+
+    event.preventDefault();
+
+    const title =
+      $("title").value.trim();
 
     const date =
-      button.dataset.browseDate;
+      $("taskDate").value;
 
-    if (!date) return;
+    const time =
+      $("taskTime").value;
 
-    selectedDate = date;
-    currentFilter = "today";
+    if (!title || !date || !time) {
+      return;
+    }
 
-    $("calendarDialog").close();
+    const task = {
+      id: crypto.randomUUID(),
+      title,
+      date,
+      time,
+      repeat: $("repeat").value,
+      reminder: $("reminder").value,
+      status: "pending",
+      pinned: false,
+      series: null
+    };
+
+    const tasks = load();
+
+    tasks.push(task);
+
+    save(tasks);
+
+    selectedDate =
+      task.date;
+
+    currentFilter =
+      "today";
+
+    $("taskForm").reset();
+
+    $("taskDialog").close();
 
     render();
   };
-}
 
-/* =========================
-   PENDIENTE DETALLE
-========================= */
+/* =========================================================
+   DETALLE DE PENDIENTE
+   ========================================================= */
 
 function openTask(id, date) {
 
-  const t =
+  const task =
     expandTasks().find(
-      x =>
-        x.id === id &&
-        x.date === date
+      item =>
+        item.id === id &&
+        item.date === date
     );
 
-  if (!t) return;
+  if (!task) return;
 
   $("detailContent").innerHTML = `
     <div class="dialog-head">
 
       <div>
-
         <div class="eyebrow">
           PENDIENTE
         </div>
 
         <h2>
-          ${t.pinned ? "📌 " : ""}
-          ${esc(t.title)}
+          ${
+            task.pinned
+              ? "📌 "
+              : ""
+          }
+          ${esc(task.title)}
         </h2>
-
       </div>
 
       <button
@@ -804,19 +1098,15 @@ function openTask(id, date) {
 
     </div>
 
-    <div
-      style="
-        padding:0 20px;
-        color:var(--muted);
-        font-size:12px
-      "
-    >
-      ${esc(dateText(t.date))}
+    <div class="detail-date">
+      ${esc(dateText(task.date))}
       ·
-      ${esc(t.time)}
-      ${t.repeat !== "once"
-        ? " · ↻ repetitivo"
-        : ""}
+      ${esc(task.time)}
+      ${
+        task.repeat !== "once"
+          ? " · ↻ repetitivo"
+          : ""
+      }
     </div>
 
     <div class="detail-actions">
@@ -858,7 +1148,7 @@ function openTask(id, date) {
         type="button"
       >
         ${
-          t.pinned
+          task.pinned
             ? "📌 Quitar prioridad"
             : "📌 Pinear como prioridad"
         }
@@ -893,150 +1183,157 @@ function openTask(id, date) {
 
   $("taskDetailDialog").showModal();
 
-  $("detailClose").onclick = () =>
-    $("taskDetailDialog").close();
+  $("detailClose").onclick =
+    function() {
+      $("taskDetailDialog").close();
+    };
 
   document
     .querySelectorAll("[data-status]")
-    .forEach(b => {
+    .forEach(button => {
 
-      b.onclick = () => {
+      button.onclick = function() {
 
         localStorage.setItem(
-          "status_" + t.occurrenceId,
-          b.dataset.status
+          "status_" +
+          task.occurrenceId,
+          button.dataset.status
         );
 
         $("taskDetailDialog").close();
 
         render();
       };
+
     });
 
-  $("pinBtn").onclick = () => {
+  $("pinBtn").onclick =
+    function() {
 
-    const all = load();
+      const all =
+        load();
 
-    const base =
-      all.find(x => x.id === t.id);
+      const base =
+        all.find(
+          item =>
+            item.id === task.id
+        );
 
-    if (base) {
+      if (base) {
+        base.pinned =
+          !base.pinned;
 
-      base.pinned =
-        !base.pinned;
+        save(all);
+      }
 
-      save(all);
-    }
+      $("taskDetailDialog").close();
 
-    $("taskDetailDialog").close();
+      render();
+    };
 
-    render();
-  };
+  $("tomorrowBtn").onclick =
+    function() {
 
-  $("tomorrowBtn").onclick = () => {
+      const tomorrow =
+        addDays(task.date, 1);
 
-    const tomorrow =
-      addDays(t.date, 1);
+      const all =
+        load();
 
-    const all =
-      load();
+      const base =
+        all.find(
+          item =>
+            item.id === task.id
+        );
 
-    const base =
-      all.find(x => x.id === t.id);
+      if (!base) return;
 
-    if (
-      base &&
-      base.repeat === "once"
-    ) {
+      if (base.repeat === "once") {
 
-      base.date = tomorrow;
-      base.status = "pending";
+        base.date =
+          tomorrow;
 
-      save(all);
+        base.status =
+          "pending";
 
-    } else if (base) {
+        save(all);
 
-      localStorage.setItem(
-        "status_" + t.occurrenceId,
-        "notdone"
+      } else {
+
+        localStorage.setItem(
+          "status_" +
+          task.occurrenceId,
+          "notdone"
+        );
+
+        all.push({
+          id: crypto.randomUUID(),
+          title: base.title,
+          date: tomorrow,
+          time: base.time,
+          repeat: "once",
+          reminder: base.reminder,
+          status: "pending",
+          pinned: !!base.pinned,
+          series: null
+        });
+
+        save(all);
+      }
+
+      $("taskDetailDialog").close();
+
+      selectedDate =
+        tomorrow;
+
+      currentFilter =
+        "today";
+
+      render();
+    };
+
+  $("editBtn").onclick =
+    function() {
+
+      $("taskDetailDialog").close();
+
+      openEdit(task);
+    };
+
+  $("deleteBtn").onclick =
+    function() {
+
+      if (
+        !confirm(
+          "¿Eliminar este pendiente?"
+        )
+      ) {
+        return;
+      }
+
+      save(
+        load().filter(
+          item =>
+            item.id !== task.id
+        )
       );
 
-      const moved = {
+      $("taskDetailDialog").close();
 
-        id: crypto.randomUUID(),
-
-        title: base.title,
-
-        date: tomorrow,
-
-        time: base.time,
-
-        repeat: "once",
-
-        reminder: base.reminder,
-
-        status: "pending",
-
-        pinned:
-          base.pinned || false,
-
-        series: null
-      };
-
-      all.push(moved);
-
-      save(all);
-    }
-
-    $("taskDetailDialog").close();
-
-    selectedDate = tomorrow;
-
-    currentFilter = "today";
-
-    render();
-  };
-
-  $("editBtn").onclick = () => {
-
-    $("taskDetailDialog").close();
-
-    openEdit(t);
-  };
-
-  $("deleteBtn").onclick = () => {
-
-    if (
-      !confirm(
-        "¿Eliminar este pendiente?"
-      )
-    ) {
-      return;
-    }
-
-    save(
-      load().filter(
-        x => x.id !== t.id
-      )
-    );
-
-    $("taskDetailDialog").close();
-
-    render();
-  };
+      render();
+    };
 }
 
-/* =========================
+/* =========================================================
    EDITAR PENDIENTE
-========================= */
+   ========================================================= */
 
-function openEdit(t) {
+function openEdit(task) {
 
   $("detailContent").innerHTML = `
     <div class="dialog-head">
 
       <div>
-
         <div class="eyebrow">
           REPROGRAMAR
         </div>
@@ -1044,7 +1341,6 @@ function openEdit(t) {
         <h2>
           Editar pendiente
         </h2>
-
       </div>
 
       <button
@@ -1060,41 +1356,35 @@ function openEdit(t) {
     <form id="editForm">
 
       <label>
-
         Pendiente
 
         <input
           id="editTitle"
           required
-          value="${esc(t.title)}"
+          value="${esc(task.title)}"
         >
-
       </label>
 
       <label>
-
         Fecha
 
         <input
           id="editDate"
           type="date"
           required
-          value="${t.date}"
+          value="${esc(task.date)}"
         >
-
       </label>
 
       <label>
-
         Hora
 
         <input
           id="editTime"
           type="time"
           required
-          value="${t.time}"
+          value="${esc(task.time)}"
         >
-
       </label>
 
       <button
@@ -1109,54 +1399,56 @@ function openEdit(t) {
 
   $("taskDetailDialog").showModal();
 
-  $("editClose").onclick = () =>
-    $("taskDetailDialog").close();
+  $("editClose").onclick =
+    function() {
+      $("taskDetailDialog").close();
+    };
 
-  $("editForm").onsubmit = e => {
+  $("editForm").onsubmit =
+    function(event) {
 
-    e.preventDefault();
+      event.preventDefault();
 
-    const a = load();
+      const tasks =
+        load();
 
-    const base =
-      a.find(x => x.id === t.id);
+      const base =
+        tasks.find(
+          item =>
+            item.id === task.id
+        );
 
-    if (!base) return;
+      if (!base) return;
 
-    Object.assign(base, {
+      base.title =
+        $("editTitle").value.trim();
 
-      title:
-        $("editTitle")
-          .value
-          .trim(),
+      base.date =
+        $("editDate").value;
 
-      date:
-        $("editDate").value,
+      base.time =
+        $("editTime").value;
 
-      time:
-        $("editTime").value,
+      base.status =
+        "pending";
 
-      status:
-        "pending"
-    });
+      save(tasks);
 
-    save(a);
+      selectedDate =
+        base.date;
 
-    selectedDate =
-      base.date;
+      currentFilter =
+        "today";
 
-    currentFilter =
-      "today";
+      $("taskDetailDialog").close();
 
-    $("taskDetailDialog").close();
-
-    render();
-  };
+      render();
+    };
 }
 
-/* =========================
+/* =========================================================
    NOTAS
-========================= */
+   ========================================================= */
 
 function renderNotes() {
 
@@ -1171,116 +1463,232 @@ function renderNotes() {
   if (!notes.length) {
 
     container.innerHTML =
-      '<div class="empty">Todavía no tienes notas.</div>';
+      '<div class="empty">' +
+      'Todavía no tienes notas.' +
+      '</div>';
 
     return;
   }
 
   container.innerHTML =
-    notes.map(note => `
+    notes
+      .map(note => {
 
-      <article
-        class="note-card"
-        data-note-id="${note.id}"
-      >
-
-        <div class="note-head">
-
-          <strong>
-            ${note.pinned ? "📌 " : "📝 "}
-            ${esc(note.title)}
-          </strong>
-
-          <button
-            class="note-more"
-            type="button"
-            data-note-menu="${note.id}"
+        return `
+          <article
+            class="note-card ${
+              note.pinned
+                ? "pinned-note"
+                : ""
+            }"
+            data-note-id="${esc(note.id)}"
           >
-            •••
-          </button>
 
-        </div>
+            <div class="note-head">
 
-        ${
-          note.text
-            ? `
-              <div class="note-text">
-                ${esc(note.text)}
-              </div>
-            `
-            : ""
-        }
+              <strong>
+                ${
+                  note.pinned
+                    ? "📌 "
+                    : "📝 "
+                }
+                ${esc(note.title)}
+              </strong>
 
-        ${
-          note.link
-            ? `
-              <a
-                class="link-btn"
-                href="${esc(note.link)}"
-                target="_blank"
-                rel="noopener"
+              <button
+                class="note-more"
+                type="button"
+                data-note-menu="${esc(note.id)}"
               >
-                🔗 Abrir enlace
-              </a>
-            `
-            : ""
-        }
+                •••
+              </button>
 
-      </article>
+            </div>
 
-    `).join("");
+            ${
+              note.text
+                ? `
+                  <div class="note-text">
+                    ${esc(note.text)}
+                  </div>
+                `
+                : ""
+            }
+
+            ${
+              note.link
+                ? `
+                  <a
+                    class="link-btn"
+                    href="${esc(note.link)}"
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    🔗 Abrir enlace
+                  </a>
+                `
+                : ""
+            }
+
+          </article>
+        `;
+      })
+      .join("");
 
   document
     .querySelectorAll(".note-card")
     .forEach(card => {
 
-      card.onclick = e => {
+      card.onclick =
+        function(event) {
 
-        if (
-          e.target.closest(".note-more")
-        ) {
-          return;
-        }
+          if (
+            event.target.closest(
+              ".note-more"
+            )
+          ) {
+            return;
+          }
 
-        const note =
-          notes.find(
-            n =>
-              n.id ===
-              card.dataset.noteId
-          );
+          const note =
+            notes.find(
+              item =>
+                item.id ===
+                card.dataset.noteId
+            );
 
-        if (note) {
-          openNoteDetail(note);
-        }
-      };
+          if (note) {
+            openNoteDetail(note);
+          }
+        };
     });
 
   document
     .querySelectorAll("[data-note-menu]")
     .forEach(button => {
 
-      button.onclick = e => {
+      button.onclick =
+        function(event) {
 
-        e.stopPropagation();
+          event.preventDefault();
+          event.stopPropagation();
 
-        const note =
-          notes.find(
-            n =>
-              n.id ===
-              button.dataset.noteMenu
-          );
+          const note =
+            notes.find(
+              item =>
+                item.id ===
+                button.dataset.noteMenu
+            );
 
-        if (!note) return;
-
-        openNoteDetail(note);
-      };
+          if (note) {
+            openNoteDetail(note);
+          }
+        };
     });
 }
+
+/* =========================================================
+   NUEVA NOTA
+   ========================================================= */
+
+$("addNoteBtn").onclick =
+  function() {
+
+    $("noteDialogTitle").textContent =
+      "Nueva nota";
+
+    $("noteForm").reset();
+
+    delete $("noteForm")
+      .dataset.editId;
+
+    $("noteDialog").showModal();
+  };
+
+$("closeNoteDialog").onclick =
+  function() {
+    $("noteDialog").close();
+  };
+
+$("noteForm").onsubmit =
+  function(event) {
+
+    event.preventDefault();
+
+    const notes =
+      loadNotes();
+
+    const editId =
+      $("noteForm").dataset.editId;
+
+    if (editId) {
+
+      const note =
+        notes.find(
+          item =>
+            item.id === editId
+        );
+
+      if (note) {
+
+        note.title =
+          $("noteTitle").value.trim();
+
+        note.text =
+          $("noteText").value.trim();
+
+        note.link =
+          $("noteLink").value.trim();
+
+        note.pinned =
+          $("notePinned").checked;
+      }
+
+    } else {
+
+      notes.push({
+        id: crypto.randomUUID(),
+
+        title:
+          $("noteTitle")
+            .value
+            .trim(),
+
+        text:
+          $("noteText")
+            .value
+            .trim(),
+
+        link:
+          $("noteLink")
+            .value
+            .trim(),
+
+        pinned:
+          $("notePinned")
+            .checked
+      });
+    }
+
+    saveNotes(notes);
+
+    $("noteForm").reset();
+
+    delete $("noteForm")
+      .dataset.editId;
+
+    $("noteDialog").close();
+
+    render();
+  };
+
+/* =========================================================
+   DETALLE DE NOTA
+   ========================================================= */
 
 function openNoteDetail(note) {
 
   $("noteDetailContent").innerHTML = `
-
     <div class="dialog-head">
 
       <div>
@@ -1290,7 +1698,11 @@ function openNoteDetail(note) {
         </div>
 
         <h2>
-          ${note.pinned ? "📌 " : ""}
+          ${
+            note.pinned
+              ? "📌 "
+              : ""
+          }
           ${esc(note.title)}
         </h2>
 
@@ -1307,7 +1719,9 @@ function openNoteDetail(note) {
     </div>
 
     <div
-      style="padding:0 20px 20px"
+      style="
+        padding:0 20px 20px;
+      "
     >
 
       ${
@@ -1372,60 +1786,71 @@ function openNoteDetail(note) {
 
   $("noteDetailDialog").showModal();
 
-  $("closeNoteDetail").onclick = () =>
-    $("noteDetailDialog").close();
+  $("closeNoteDetail").onclick =
+    function() {
+      $("noteDetailDialog").close();
+    };
 
-  $("notePinBtn").onclick = () => {
+  $("notePinBtn").onclick =
+    function() {
 
-    const notes =
-      loadNotes();
+      const notes =
+        loadNotes();
 
-    const base =
-      notes.find(
-        n => n.id === note.id
+      const base =
+        notes.find(
+          item =>
+            item.id === note.id
+        );
+
+      if (base) {
+
+        base.pinned =
+          !base.pinned;
+
+        saveNotes(notes);
+      }
+
+      $("noteDetailDialog").close();
+
+      render();
+    };
+
+  $("noteEditBtn").onclick =
+    function() {
+
+      $("noteDetailDialog").close();
+
+      openNoteEdit(note);
+    };
+
+  $("noteDeleteBtn").onclick =
+    function() {
+
+      if (
+        !confirm(
+          "¿Eliminar esta nota?"
+        )
+      ) {
+        return;
+      }
+
+      saveNotes(
+        loadNotes().filter(
+          item =>
+            item.id !== note.id
+        )
       );
 
-    if (base) {
+      $("noteDetailDialog").close();
 
-      base.pinned =
-        !base.pinned;
-
-      saveNotes(notes);
-    }
-
-    $("noteDetailDialog").close();
-
-    render();
-  };
-
-  $("noteEditBtn").onclick = () => {
-
-    $("noteDetailDialog").close();
-
-    openNoteEdit(note);
-  };
-
-  $("noteDeleteBtn").onclick = () => {
-
-    if (
-      !confirm(
-        "¿Eliminar esta nota?"
-      )
-    ) {
-      return;
-    }
-
-    saveNotes(
-      loadNotes().filter(
-        n => n.id !== note.id
-      )
-    );
-
-    $("noteDetailDialog").close();
-
-    render();
-  };
+      render();
+    };
 }
+
+/* =========================================================
+   EDITAR NOTA
+   ========================================================= */
 
 function openNoteEdit(note) {
 
@@ -1444,295 +1869,122 @@ function openNoteEdit(note) {
   $("notePinned").checked =
     !!note.pinned;
 
-  $("noteForm").dataset.editId =
+  $("noteForm")
+    .dataset
+    .editId =
     note.id;
 
   $("noteDialog").showModal();
 }
 
-/* =========================
-   NAVEGACIÓN
-========================= */
+/* =========================================================
+   NAVEGACIÓN ENTRE DÍAS
+   ========================================================= */
 
-$("prevDay").onclick = () => {
+$("prevDay").onclick =
+  function() {
 
-  selectedDate =
-    addDays(
-      selectedDate,
-      -1
-    );
+    selectedDate =
+      addDays(
+        selectedDate,
+        -1
+      );
 
-  currentFilter =
-    "today";
+    currentFilter =
+      "today";
 
-  render();
-};
+    render();
+  };
 
-$("nextDay").onclick = () => {
+$("nextDay").onclick =
+  function() {
 
-  selectedDate =
-    addDays(
-      selectedDate,
-      1
-    );
+    selectedDate =
+      addDays(
+        selectedDate,
+        1
+      );
 
-  currentFilter =
-    "today";
+    currentFilter =
+      "today";
 
-  render();
-};
+    render();
+  };
+
+/* =========================================================
+   FILTROS
+   ========================================================= */
 
 document
   .querySelectorAll(
     ".filter[data-filter]"
   )
-  .forEach(b => {
+  .forEach(button => {
 
-    b.onclick = () => {
+    button.onclick =
+      function() {
 
-      currentFilter =
-        b.dataset.filter;
+        currentFilter =
+          button.dataset.filter;
 
-      if (
-        currentFilter ===
-        "today"
-      ) {
-        selectedDate =
-          todayString();
-      }
+        if (
+          currentFilter ===
+          "today"
+        ) {
+          selectedDate =
+            todayString();
+        }
 
-      render();
-    };
+        render();
+      };
   });
 
-/* =========================
-   MINI CALENDARIO DE FECHA
-========================= */
+/* =========================================================
+   SELECTOR DE FECHA PRINCIPAL
+   ========================================================= */
 
-$("datePickerBtn").onclick = () => {
+$("datePickerBtn").onclick =
+  function() {
 
-  browseMonth =
-    dateFromString(
-      selectedDate
-    );
-
-  $("calendarDialog")
-    .showModal();
-
-  renderBrowseCalendar();
-};
-
-$("closeCalendarDialog").onclick = () =>
-  $("calendarDialog").close();
-
-/* =========================
-   AGREGAR PENDIENTE
-========================= */
-
-$("addBtn").onclick = () => {
-
-  $("taskForm").reset();
-
-  $("taskDate").value =
-    selectedDate;
-
-  const d =
-    dateFromString(
-      selectedDate
-    );
-
-  calendarMonth =
-    new Date(
-      d.getFullYear(),
-      d.getMonth(),
-      1
-    );
-
-  renderCalendar();
-
-  $("taskDialog")
-    .showModal();
-};
-
-$("closeDialog").onclick = () =>
-  $("taskDialog").close();
-
-$("taskForm").onsubmit = e => {
-
-  e.preventDefault();
-
-  e.stopPropagation();
-
-  const task = {
-
-    id:
-      crypto.randomUUID(),
-
-    title:
-      $("title")
-        .value
-        .trim(),
-
-    date:
-      $("taskDate").value,
-
-    time:
-      $("taskTime").value,
-
-    repeat:
-      $("repeat").value,
-
-    reminder:
-      $("reminder").value,
-
-    status:
-      "pending",
-
-    pinned:
-      false,
-
-    series:
-      null
-  };
-
-  const a =
-    load();
-
-  a.push(task);
-
-  save(a);
-
-  selectedDate =
-    task.date;
-
-  currentFilter =
-    "today";
-
-  $("taskForm").reset();
-
-  $("taskDialog")
-    .close();
-
-  render();
-};
-
-/* =========================
-   AGREGAR / EDITAR NOTA
-========================= */
-
-$("addNoteBtn").onclick = () => {
-
-  $("noteDialogTitle")
-    .textContent =
-    "Nueva nota";
-
-  $("noteForm").reset();
-
-  delete $("noteForm")
-    .dataset.editId;
-
-  $("noteDialog")
-    .showModal();
-};
-
-$("closeNoteDialog").onclick = () =>
-  $("noteDialog").close();
-
-$("noteForm").onsubmit = e => {
-
-  e.preventDefault();
-
-  const notes =
-    loadNotes();
-
-  const editId =
-    $("noteForm")
-      .dataset
-      .editId;
-
-  if (editId) {
-
-    const note =
-      notes.find(
-        n => n.id === editId
+    browseMonth =
+      dateFromString(
+        selectedDate
       );
 
-    if (note) {
+    browseMonth =
+      new Date(
+        browseMonth.getFullYear(),
+        browseMonth.getMonth(),
+        1
+      );
 
-      note.title =
-        $("noteTitle")
-          .value
-          .trim();
+    $("calendarDialog")
+      .showModal();
 
-      note.text =
-        $("noteText")
-          .value
-          .trim();
+    renderBrowseCalendar();
+  };
 
-      note.link =
-        $("noteLink")
-          .value
-          .trim();
+$("closeCalendarDialog").onclick =
+  function() {
+    $("calendarDialog").close();
+  };
 
-      note.pinned =
-        $("notePinned")
-          .checked;
-    }
-
-  } else {
-
-    notes.push({
-
-      id:
-        crypto.randomUUID(),
-
-      title:
-        $("noteTitle")
-          .value
-          .trim(),
-
-      text:
-        $("noteText")
-          .value
-          .trim(),
-
-      link:
-        $("noteLink")
-          .value
-          .trim(),
-
-      pinned:
-        $("notePinned")
-          .checked
-    });
-  }
-
-  saveNotes(notes);
-
-  $("noteForm").reset();
-
-  delete $("noteForm")
-    .dataset.editId;
-
-  $("noteDialog")
-    .close();
-
-  render();
-};
-
-/* =========================
+/* =========================================================
    SETTINGS
-========================= */
+   ========================================================= */
 
-$("settingsBtn").onclick = () =>
-  alert(
-    "Aquí añadiremos después las notificaciones y el calendario compartido."
-  );
+$("settingsBtn").onclick =
+  function() {
 
-/* =========================
-   INICIAR
-========================= */
+    alert(
+      "Las notificaciones se pueden añadir después. " +
+      "El calendario compartido no está activado."
+    );
+  };
+
+/* =========================================================
+   INICIO
+   ========================================================= */
 
 seed();
-
 render();
