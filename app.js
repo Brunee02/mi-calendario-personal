@@ -1973,14 +1973,6 @@ $("closeCalendarDialog").onclick =
    SETTINGS
    ========================================================= */
 
-$("settingsBtn").onclick =
-  function() {
-
-    alert(
-      "Las notificaciones se pueden añadir después. " +
-      "El calendario compartido no está activado."
-    );
-  };
 
 /* =========================================================
    INICIO
