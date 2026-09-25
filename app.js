@@ -1,12 +1,10 @@
 const STORAGE_KEY = "mi_calendario_personal_clean_v1";
+const NOTES_KEY = "mi_calendario_personal_notes_v1";
 
 let selectedDate = todayString();
 let currentFilter = "today";
-
-// Calendario: usamos año y mes por separado para evitar problemas
-// de Safari/iPhone con Date y zonas horarias.
-let calendarYear = new Date().getFullYear();
-let calendarMonthIndex = new Date().getMonth();
+let calendarMonth = new Date();
+let browseMonth = new Date();
 
 const $ = id => document.getElementById(id);
 
@@ -37,12 +35,6 @@ function dateText(s) {
   });
 }
 
-function diff(a, b) {
-  return Math.round(
-    (dateFromString(a) - dateFromString(b)) / 86400000
-  );
-}
-
 function load() {
   return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
 }
@@ -51,21 +43,26 @@ function save(a) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(a));
 }
 
+function loadNotes() {
+  return JSON.parse(localStorage.getItem(NOTES_KEY) || "[]");
+}
+
+function saveNotes(a) {
+  localStorage.setItem(NOTES_KEY, JSON.stringify(a));
+}
+
 function esc(v) {
-  return String(v).replace(
-    /[&<>"']/g,
-    c => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#039;"
-    }[c])
-  );
+  return String(v).replace(/[&<>"']/g, c => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  }[c]));
 }
 
 /* =========================
-   DATOS INICIALES
+   PENDIENTES
 ========================= */
 
 function seed() {
@@ -82,6 +79,7 @@ function seed() {
       repeat: "once",
       reminder: "10",
       status: "done",
+      pinned: false,
       series: null
     },
     {
@@ -92,6 +90,7 @@ function seed() {
       repeat: "once",
       reminder: "10",
       status: "pending",
+      pinned: false,
       series: null
     },
     {
@@ -102,6 +101,7 @@ function seed() {
       repeat: "once",
       reminder: "10",
       status: "pending",
+      pinned: false,
       series: null
     },
     {
@@ -112,43 +112,29 @@ function seed() {
       repeat: "daily",
       reminder: "10",
       status: "pending",
+      pinned: false,
       series: crypto.randomUUID()
     }
   ]);
 }
 
-/* =========================
-   REPETICIONES
-========================= */
-
 function occurrenceDates(task, from, to) {
   const out = [];
   const start = dateFromString(task.date);
   const end = dateFromString(to);
-
   let d = new Date(start);
 
   while (d <= end) {
     const s = formatDate(d);
 
     if (s >= from) {
-      const daysSince = Math.round(
-        (d - start) / 86400000
-      );
-
+      const daysSince = Math.round((d - start) / 86400000);
       const weekday = d.getDay();
 
       const ok =
         task.repeat === "daily" ||
-        (
-          task.repeat === "weekdays" &&
-          weekday >= 1 &&
-          weekday <= 5
-        ) ||
-        (
-          task.repeat === "weekly" &&
-          daysSince % 7 === 0
-        ) ||
+        (task.repeat === "weekdays" && weekday >= 1 && weekday <= 5) ||
+        (task.repeat === "weekly" && daysSince % 7 === 0) ||
         task.repeat === "once";
 
       if (ok) out.push(s);
@@ -181,21 +167,15 @@ function expandTasks() {
       : selectedDate;
 
   base.forEach(task => {
-    const dates = occurrenceDates(
-      task,
-      rangeStart,
-      rangeEnd
-    );
+    const dates = occurrenceDates(task, rangeStart, rangeEnd);
 
     dates.forEach(date => {
       const occurrenceId = `${task.id}_${date}`;
-
-      const stored = localStorage.getItem(
-        "status_" + occurrenceId
-      );
+      const stored = localStorage.getItem("status_" + occurrenceId);
 
       result.push({
         ...task,
+        pinned: !!task.pinned,
         occurrenceId,
         date,
         status: stored || task.status
@@ -207,49 +187,126 @@ function expandTasks() {
 }
 
 /* =========================
-   RENDER PRINCIPAL
+   IMPORTANTES
+========================= */
+
+function renderPriority() {
+  const container = $("priorityList");
+  if (!container) return;
+
+  const tasks = load().filter(t => t.pinned);
+  const notes = loadNotes().filter(n => n.pinned);
+
+  if (!tasks.length && !notes.length) {
+    container.innerHTML =
+      '<div class="empty">Todavía no tienes nada pineado.</div>';
+    return;
+  }
+
+  let html = "";
+
+  tasks.forEach(task => {
+    html += `
+      <article class="task pinned-task"
+        data-priority-task="${task.id}">
+        <div class="task-time">${esc(task.time)}</div>
+        <div class="task-state">📌</div>
+        <div class="task-body">
+          <div class="task-title">${esc(task.title)}</div>
+          <div class="task-meta">
+            ${esc(dateText(task.date))}
+          </div>
+        </div>
+      </article>
+    `;
+  });
+
+  notes.forEach(note => {
+    html += `
+      <article class="task pinned-note"
+        data-priority-note="${note.id}">
+        <div class="task-time">📌</div>
+        <div class="task-state">📝</div>
+        <div class="task-body">
+          <div class="task-title">${esc(note.title)}</div>
+          <div class="task-meta">Nota importante</div>
+        </div>
+      </article>
+    `;
+  });
+
+  container.innerHTML = html;
+
+  container.querySelectorAll("[data-priority-task]").forEach(el => {
+    el.onclick = () => {
+      const id = el.dataset.priorityTask;
+      const task = load().find(t => t.id === id);
+
+      if (task) {
+        selectedDate = task.date;
+        currentFilter = "today";
+        render();
+        openTask(task.id, task.date);
+      }
+    };
+  });
+
+  container.querySelectorAll("[data-priority-note]").forEach(el => {
+    el.onclick = () => {
+      const note = loadNotes().find(
+        n => n.id === el.dataset.priorityNote
+      );
+
+      if (note) openNoteDetail(note);
+    };
+  });
+}
+
+/* =========================
+   RENDER PENDIENTES
 ========================= */
 
 function render() {
   $("currentDate").textContent = dateText(selectedDate);
-
   $("currentYear").textContent =
     dateFromString(selectedDate).getFullYear();
 
   document
     .querySelectorAll(".filter[data-filter]")
-    .forEach(b => {
+    .forEach(b =>
       b.classList.toggle(
         "active",
         b.dataset.filter === currentFilter
-      );
-    });
+      )
+    );
+
+  renderPriority();
+  renderNotes();
 
   let tasks = expandTasks();
 
   if (currentFilter === "today") {
-    tasks = tasks.filter(
-      t => t.date === selectedDate
-    );
+    tasks = tasks.filter(t => t.date === selectedDate);
   }
 
   if (currentFilter === "future") {
-    tasks = tasks.filter(
-      t => t.date > todayString()
-    );
+    tasks = tasks.filter(t => t.date > todayString());
   }
 
   if (currentFilter === "past") {
-    tasks = tasks.filter(
-      t => t.date < todayString()
-    );
+    tasks = tasks.filter(t => t.date < todayString());
   }
 
-  tasks.sort(
-    (a, b) =>
+  tasks.sort((a, b) => {
+    if (a.pinned !== b.pinned) {
+      return b.pinned ? 1 : -1;
+    }
+
+    return (
       a.date.localeCompare(b.date) ||
       a.time.localeCompare(b.time)
-  );
+    );
+  });
 
   $("sectionTitle").textContent =
     currentFilter === "today"
@@ -265,135 +322,102 @@ function render() {
   if (!tasks.length) {
     $("taskList").innerHTML =
       '<div class="empty">No hay pendientes aquí.<br><br>Agrega uno con el botón de abajo.</div>';
-
     return;
   }
 
-  $("taskList").innerHTML = tasks
-    .map(t => {
-      const symbol =
-        t.status === "done"
-          ? "✓"
-          : t.status === "notdone"
-          ? "×"
-          : "◷";
+  $("taskList").innerHTML = tasks.map(t => {
+    const symbol =
+      t.status === "done"
+        ? "✓"
+        : t.status === "notdone"
+        ? "×"
+        : "◷";
 
-      const repeat =
-        t.repeat !== "once"
-          ? "↻ "
-          : "";
+    const repeat =
+      t.repeat !== "once" ? "↻ " : "";
 
-      return `
-        <article
-          class="task ${t.status}"
-          data-id="${t.id}"
-          data-date="${t.date}"
-        >
-          <div class="task-time">${t.time}</div>
+    const pin = t.pinned ? " 📌" : "";
 
-          <div class="task-state">
-            ${symbol}
+    return `
+      <article
+        class="task ${t.status}"
+        data-id="${t.id}"
+        data-date="${t.date}"
+      >
+        <div class="task-time">${esc(t.time)}</div>
+        <div class="task-state">${symbol}</div>
+
+        <div class="task-body">
+          <div class="task-title">
+            ${esc(t.title)}${pin}
           </div>
 
-          <div class="task-body">
-            <div class="task-title">
-              ${esc(t.title)}
-            </div>
-
-            <div class="task-meta">
-              ${
-                currentFilter !== "today"
-                  ? esc(dateText(t.date)) + " · "
-                  : ""
-              }
-
-              ${repeat}
-
-              ${
-                t.reminder === "10"
-                  ? "10 min antes"
-                  : t.reminder === "none"
-                  ? "sin aviso"
-                  : t.reminder + " min antes"
-              }
-            </div>
+          <div class="task-meta">
+            ${
+              currentFilter !== "today"
+                ? esc(dateText(t.date)) + " · "
+                : ""
+            }
+            ${repeat}
+            ${
+              t.reminder === "10"
+                ? "10 min antes"
+                : t.reminder === "none"
+                ? "sin aviso"
+                : t.reminder + " min antes"
+            }
           </div>
-        </article>
-      `;
-    })
-    .join("");
+        </div>
+      </article>
+    `;
+  }).join("");
 
-  document
-    .querySelectorAll(".task")
-    .forEach(el => {
-      el.onclick = () =>
-        openTask(
-          el.dataset.id,
-          el.dataset.date
-        );
-    });
+  document.querySelectorAll(".task[data-id]").forEach(el => {
+    el.onclick = () =>
+      openTask(el.dataset.id, el.dataset.date);
+  });
 }
 
 /* =========================
    CALENDARIO PARA AGREGAR
-   ========================= */
+   CORREGIDO PARA IPHONE
+========================= */
 
-function setCalendarFromDate(dateString) {
-  const parts = dateString.split("-").map(Number);
-
-  calendarYear = parts[0];
-  calendarMonthIndex = parts[1] - 1;
-}
-
-/*
-  Esta función NO usa Date para calcular los días
-  visibles del calendario.
-
-  Esto evita los problemas que Safari/iPhone puede
-  tener al interpretar fechas.
-*/
 function renderCalendar() {
   const c = $("calendarPicker");
-
   if (!c) return;
 
-  const y = calendarYear;
-  const m = calendarMonthIndex;
+  const selectedInput = $("taskDate");
 
-  // Día de la semana del día 1.
-  // Usamos Date únicamente para saber qué día de la semana es.
-  // La fecha seleccionada NO se construye desde strings.
-  const firstDay = new Date(y, m, 1);
-  const start =
-    (firstDay.getDay() + 6) % 7;
+  const selectedValue =
+    selectedInput &&
+    /^\d{4}-\d{2}-\d{2}$/.test(selectedInput.value)
+      ? selectedInput.value
+      : todayString();
 
-  const total =
-    new Date(y, m + 1, 0).getDate();
+  const y = calendarMonth.getFullYear();
+  const m = calendarMonth.getMonth();
 
-  const prevTotal =
-    new Date(y, m, 0).getDate();
-
-  const monthName =
-    new Date(y, m, 1).toLocaleDateString(
-      "es-PE",
-      {
-        month: "long",
-        year: "numeric"
-      }
-    );
+  const first = new Date(y, m, 1);
+  const start = (first.getDay() + 6) % 7;
+  const total = new Date(y, m + 1, 0).getDate();
+  const prevTotal = new Date(y, m, 0).getDate();
 
   let h = `
     <div class="calendar-head">
 
       <strong>
-        ${monthName}
+        ${calendarMonth.toLocaleDateString("es-PE", {
+          month: "long",
+          year: "numeric"
+        })}
       </strong>
 
       <div class="calendar-nav">
 
         <button
           type="button"
-          id="calPrev"
+          data-calendar-action="prev"
           aria-label="Mes anterior"
         >
           ‹
@@ -401,14 +425,220 @@ function renderCalendar() {
 
         <button
           type="button"
-          id="calNext"
+          data-calendar-action="next"
           aria-label="Mes siguiente"
         >
           ›
         </button>
 
       </div>
+    </div>
 
+    <div class="calendar-week">
+      ${["L","M","M","J","V","S","D"]
+        .map(x => `<span>${x}</span>`)
+        .join("")}
+    </div>
+
+    <div class="calendar-grid">
+  `;
+
+  for (let i = 0; i < 42; i++) {
+
+    const n = i - start + 1;
+
+    let dt;
+
+    if (n < 1) {
+      dt = new Date(
+        y,
+        m - 1,
+        prevTotal + n
+      );
+    } else if (n > total) {
+      dt = new Date(
+        y,
+        m + 1,
+        n - total
+      );
+    } else {
+      dt = new Date(
+        y,
+        m,
+        n
+      );
+    }
+
+    const ds = formatDate(dt);
+
+    const muted =
+      dt.getMonth() !== m;
+
+    const isToday =
+      ds === todayString();
+
+    const selected =
+      ds === selectedValue;
+
+    h += `
+      <button
+        type="button"
+        class="calendar-day
+          ${muted ? "muted" : ""}
+          ${selected ? "selected" : ""}
+          ${isToday ? "today" : ""}"
+        data-calendar-date="${ds}"
+        aria-label="Seleccionar ${ds}"
+      >
+        ${dt.getDate()}
+      </button>
+    `;
+  }
+
+  h += "</div>";
+
+  c.innerHTML = h;
+
+  /*
+    IMPORTANTE PARA IPHONE:
+
+    En vez de asignar onclick a cada botón
+    después de dibujar el calendario, usamos
+    un único evento en el contenedor.
+
+    Además bloqueamos el comportamiento
+    predeterminado del formulario.
+  */
+
+  c.onclick = e => {
+
+    const button =
+      e.target.closest("button");
+
+    if (!button || !c.contains(button)) {
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const action =
+      button.dataset.calendarAction;
+
+    /* MES ANTERIOR */
+
+    if (action === "prev") {
+
+      calendarMonth =
+        new Date(
+          y,
+          m - 1,
+          1
+        );
+
+      renderCalendar();
+
+      return;
+    }
+
+    /* MES SIGUIENTE */
+
+    if (action === "next") {
+
+      calendarMonth =
+        new Date(
+          y,
+          m + 1,
+          1
+        );
+
+      renderCalendar();
+
+      return;
+    }
+
+    /* SELECCIONAR FECHA */
+
+    const date =
+      button.dataset.calendarDate;
+
+    if (!date) {
+      return;
+    }
+
+    $("taskDate").value = date;
+
+    const d =
+      dateFromString(date);
+
+    calendarMonth =
+      new Date(
+        d.getFullYear(),
+        d.getMonth(),
+        1
+      );
+
+    renderCalendar();
+  };
+}
+
+/* =========================
+   MINI CALENDARIO DE FILTRO
+========================= */
+
+function renderBrowseCalendar() {
+
+  const c = $("browseCalendar");
+
+  if (!c) return;
+
+  const y =
+    browseMonth.getFullYear();
+
+  const m =
+    browseMonth.getMonth();
+
+  const first =
+    new Date(y, m, 1);
+
+  const start =
+    (first.getDay() + 6) % 7;
+
+  const total =
+    new Date(y, m + 1, 0).getDate();
+
+  const prevTotal =
+    new Date(y, m, 0).getDate();
+
+  let h = `
+    <div class="calendar-head">
+
+      <strong>
+        ${browseMonth.toLocaleDateString("es-PE", {
+          month: "long",
+          year: "numeric"
+        })}
+      </strong>
+
+      <div class="calendar-nav">
+
+        <button
+          type="button"
+          data-browse-action="prev"
+          aria-label="Mes anterior"
+        >
+          ‹
+        </button>
+
+        <button
+          type="button"
+          data-browse-action="next"
+          aria-label="Mes siguiente"
+        >
+          ›
+        </button>
+
+      </div>
     </div>
 
     <div class="calendar-week">
@@ -425,157 +655,116 @@ function renderCalendar() {
     const n =
       i - start + 1;
 
-    let displayYear = y;
-    let displayMonth = m;
-    let displayDay;
+    let dt;
 
     if (n < 1) {
 
-      displayMonth = m - 1;
-
-      if (displayMonth < 0) {
-        displayMonth = 11;
-        displayYear = y - 1;
-      }
-
-      displayDay =
-        prevTotal + n;
+      dt =
+        new Date(
+          y,
+          m - 1,
+          prevTotal + n
+        );
 
     } else if (n > total) {
 
-      displayMonth = m + 1;
-
-      if (displayMonth > 11) {
-        displayMonth = 0;
-        displayYear = y + 1;
-      }
-
-      displayDay =
-        n - total;
+      dt =
+        new Date(
+          y,
+          m + 1,
+          n - total
+        );
 
     } else {
 
-      displayDay = n;
+      dt =
+        new Date(
+          y,
+          m,
+          n
+        );
     }
 
     const ds =
-      `${displayYear}-${String(displayMonth + 1).padStart(2, "0")}-${String(displayDay).padStart(2, "0")}`;
-
-    const selected =
-      ds === $("taskDate").value;
-
-    const muted =
-      displayMonth !== m ||
-      displayYear !== y;
-
-    const isToday =
-      ds === todayString();
+      formatDate(dt);
 
     h += `
       <button
         type="button"
         class="calendar-day
-          ${muted ? "muted" : ""}
-          ${selected ? "selected" : ""}
-          ${isToday ? "today" : ""}"
-        data-date="${ds}"
+          ${dt.getMonth() !== m ? "muted" : ""}
+          ${ds === selectedDate ? "selected" : ""}
+          ${ds === todayString() ? "today" : ""}"
+        data-browse-date="${ds}"
       >
-        ${displayDay}
+        ${dt.getDate()}
       </button>
     `;
   }
 
-  h += `
-    </div>
-  `;
+  h += "</div>";
 
   c.innerHTML = h;
 
-  /* -------------------------
-     MES ANTERIOR
-  ------------------------- */
+  c.onclick = e => {
 
-  const prev =
-    document.getElementById("calPrev");
+    const button =
+      e.target.closest("button");
 
-  if (prev) {
-    prev.addEventListener(
-      "click",
-      function (e) {
+    if (!button || !c.contains(button)) {
+      return;
+    }
 
-        e.preventDefault();
-        e.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
 
-        calendarMonthIndex--;
+    const action =
+      button.dataset.browseAction;
 
-        if (calendarMonthIndex < 0) {
-          calendarMonthIndex = 11;
-          calendarYear--;
-        }
+    if (action === "prev") {
 
-        renderCalendar();
-      }
-    );
-  }
+      browseMonth =
+        new Date(
+          y,
+          m - 1,
+          1
+        );
 
-  /* -------------------------
-     MES SIGUIENTE
-  ------------------------- */
+      renderBrowseCalendar();
 
-  const next =
-    document.getElementById("calNext");
+      return;
+    }
 
-  if (next) {
-    next.addEventListener(
-      "click",
-      function (e) {
+    if (action === "next") {
 
-        e.preventDefault();
-        e.stopPropagation();
+      browseMonth =
+        new Date(
+          y,
+          m + 1,
+          1
+        );
 
-        calendarMonthIndex++;
+      renderBrowseCalendar();
 
-        if (calendarMonthIndex > 11) {
-          calendarMonthIndex = 0;
-          calendarYear++;
-        }
+      return;
+    }
 
-        renderCalendar();
-      }
-    );
-  }
+    const date =
+      button.dataset.browseDate;
 
-  /* -------------------------
-     SELECCIONAR FECHA
-  ------------------------- */
+    if (!date) return;
 
-  c.querySelectorAll(".calendar-day")
-    .forEach(button => {
+    selectedDate = date;
+    currentFilter = "today";
 
-      button.addEventListener(
-        "click",
-        function (e) {
+    $("calendarDialog").close();
 
-          e.preventDefault();
-          e.stopPropagation();
-
-          const value =
-            this.dataset.date;
-
-          $("taskDate").value =
-            value;
-
-          setCalendarFromDate(value);
-
-          renderCalendar();
-        }
-      );
-
-    });
+    render();
+  };
 }
 
 /* =========================
-   DETALLE DE PENDIENTE
+   PENDIENTE DETALLE
 ========================= */
 
 function openTask(id, date) {
@@ -593,18 +782,22 @@ function openTask(id, date) {
     <div class="dialog-head">
 
       <div>
+
         <div class="eyebrow">
           PENDIENTE
         </div>
 
         <h2>
+          ${t.pinned ? "📌 " : ""}
           ${esc(t.title)}
         </h2>
+
       </div>
 
       <button
         class="close-btn"
         id="detailClose"
+        type="button"
       >
         ×
       </button>
@@ -612,16 +805,18 @@ function openTask(id, date) {
     </div>
 
     <div
-      style="padding:0 20px;color:var(--muted);font-size:12px"
+      style="
+        padding:0 20px;
+        color:var(--muted);
+        font-size:12px
+      "
     >
-      ${dateText(t.date)}
+      ${esc(dateText(t.date))}
       ·
-      ${t.time}
-      ${
-        t.repeat !== "once"
-          ? " · ↻ repetitivo"
-          : ""
-      }
+      ${esc(t.time)}
+      ${t.repeat !== "once"
+        ? " · ↻ repetitivo"
+        : ""}
     </div>
 
     <div class="detail-actions">
@@ -629,6 +824,7 @@ function openTask(id, date) {
       <button
         class="action-btn"
         data-status="done"
+        type="button"
       >
         <b>✓</b>
         Realizado
@@ -637,6 +833,7 @@ function openTask(id, date) {
       <button
         class="action-btn"
         data-status="notdone"
+        type="button"
       >
         <b>×</b>
         No realizado
@@ -645,6 +842,7 @@ function openTask(id, date) {
       <button
         class="action-btn"
         data-status="pending"
+        type="button"
       >
         <b>◷</b>
         Pendiente
@@ -656,7 +854,20 @@ function openTask(id, date) {
 
       <button
         class="action-btn"
+        id="pinBtn"
+        type="button"
+      >
+        ${
+          t.pinned
+            ? "📌 Quitar prioridad"
+            : "📌 Pinear como prioridad"
+        }
+      </button>
+
+      <button
+        class="action-btn"
         id="tomorrowBtn"
+        type="button"
       >
         Mañana · misma hora
       </button>
@@ -664,6 +875,7 @@ function openTask(id, date) {
       <button
         class="action-btn"
         id="editBtn"
+        type="button"
       >
         Cambiar fecha/hora
       </button>
@@ -671,6 +883,7 @@ function openTask(id, date) {
       <button
         class="action-btn"
         id="deleteBtn"
+        type="button"
       >
         Eliminar
       </button>
@@ -680,8 +893,8 @@ function openTask(id, date) {
 
   $("taskDetailDialog").showModal();
 
-  $("detailClose").onclick =
-    () => $("taskDetailDialog").close();
+  $("detailClose").onclick = () =>
+    $("taskDetailDialog").close();
 
   document
     .querySelectorAll("[data-status]")
@@ -698,15 +911,35 @@ function openTask(id, date) {
 
         render();
       };
-
     });
+
+  $("pinBtn").onclick = () => {
+
+    const all = load();
+
+    const base =
+      all.find(x => x.id === t.id);
+
+    if (base) {
+
+      base.pinned =
+        !base.pinned;
+
+      save(all);
+    }
+
+    $("taskDetailDialog").close();
+
+    render();
+  };
 
   $("tomorrowBtn").onclick = () => {
 
     const tomorrow =
       addDays(t.date, 1);
 
-    const all = load();
+    const all =
+      load();
 
     const base =
       all.find(x => x.id === t.id);
@@ -729,13 +962,24 @@ function openTask(id, date) {
       );
 
       const moved = {
+
         id: crypto.randomUUID(),
+
         title: base.title,
+
         date: tomorrow,
+
         time: base.time,
+
         repeat: "once",
+
         reminder: base.reminder,
+
         status: "pending",
+
+        pinned:
+          base.pinned || false,
+
         series: null
       };
 
@@ -747,39 +991,43 @@ function openTask(id, date) {
     $("taskDetailDialog").close();
 
     selectedDate = tomorrow;
+
     currentFilter = "today";
 
     render();
   };
 
   $("editBtn").onclick = () => {
+
     $("taskDetailDialog").close();
+
     openEdit(t);
   };
 
   $("deleteBtn").onclick = () => {
 
     if (
-      confirm(
+      !confirm(
         "¿Eliminar este pendiente?"
       )
     ) {
-
-      save(
-        load().filter(
-          x => x.id !== t.id
-        )
-      );
-
-      $("taskDetailDialog").close();
-
-      render();
+      return;
     }
+
+    save(
+      load().filter(
+        x => x.id !== t.id
+      )
+    );
+
+    $("taskDetailDialog").close();
+
+    render();
   };
 }
 
 /* =========================
-   EDITAR
+   EDITAR PENDIENTE
 ========================= */
 
 function openEdit(t) {
@@ -788,6 +1036,7 @@ function openEdit(t) {
     <div class="dialog-head">
 
       <div>
+
         <div class="eyebrow">
           REPROGRAMAR
         </div>
@@ -795,11 +1044,13 @@ function openEdit(t) {
         <h2>
           Editar pendiente
         </h2>
+
       </div>
 
       <button
         class="close-btn"
         id="editClose"
+        type="button"
       >
         ×
       </button>
@@ -809,36 +1060,46 @@ function openEdit(t) {
     <form id="editForm">
 
       <label>
+
         Pendiente
+
         <input
           id="editTitle"
           required
           value="${esc(t.title)}"
         >
+
       </label>
 
       <label>
+
         Fecha
+
         <input
           id="editDate"
           type="date"
           required
           value="${t.date}"
         >
+
       </label>
 
       <label>
+
         Hora
+
         <input
           id="editTime"
           type="time"
           required
           value="${t.time}"
         >
+
       </label>
 
       <button
         class="primary-btn"
+        type="submit"
       >
         Guardar cambios
       </button>
@@ -848,9 +1109,8 @@ function openEdit(t) {
 
   $("taskDetailDialog").showModal();
 
-  $("editClose").onclick =
-    () =>
-      $("taskDetailDialog").close();
+  $("editClose").onclick = () =>
+    $("taskDetailDialog").close();
 
   $("editForm").onsubmit = e => {
 
@@ -861,9 +1121,14 @@ function openEdit(t) {
     const base =
       a.find(x => x.id === t.id);
 
+    if (!base) return;
+
     Object.assign(base, {
+
       title:
-        $("editTitle").value.trim(),
+        $("editTitle")
+          .value
+          .trim(),
 
       date:
         $("editDate").value,
@@ -890,13 +1155,312 @@ function openEdit(t) {
 }
 
 /* =========================
+   NOTAS
+========================= */
+
+function renderNotes() {
+
+  const container =
+    $("notesList");
+
+  if (!container) return;
+
+  const notes =
+    loadNotes();
+
+  if (!notes.length) {
+
+    container.innerHTML =
+      '<div class="empty">Todavía no tienes notas.</div>';
+
+    return;
+  }
+
+  container.innerHTML =
+    notes.map(note => `
+
+      <article
+        class="note-card"
+        data-note-id="${note.id}"
+      >
+
+        <div class="note-head">
+
+          <strong>
+            ${note.pinned ? "📌 " : "📝 "}
+            ${esc(note.title)}
+          </strong>
+
+          <button
+            class="note-more"
+            type="button"
+            data-note-menu="${note.id}"
+          >
+            •••
+          </button>
+
+        </div>
+
+        ${
+          note.text
+            ? `
+              <div class="note-text">
+                ${esc(note.text)}
+              </div>
+            `
+            : ""
+        }
+
+        ${
+          note.link
+            ? `
+              <a
+                class="link-btn"
+                href="${esc(note.link)}"
+                target="_blank"
+                rel="noopener"
+              >
+                🔗 Abrir enlace
+              </a>
+            `
+            : ""
+        }
+
+      </article>
+
+    `).join("");
+
+  document
+    .querySelectorAll(".note-card")
+    .forEach(card => {
+
+      card.onclick = e => {
+
+        if (
+          e.target.closest(".note-more")
+        ) {
+          return;
+        }
+
+        const note =
+          notes.find(
+            n =>
+              n.id ===
+              card.dataset.noteId
+          );
+
+        if (note) {
+          openNoteDetail(note);
+        }
+      };
+    });
+
+  document
+    .querySelectorAll("[data-note-menu]")
+    .forEach(button => {
+
+      button.onclick = e => {
+
+        e.stopPropagation();
+
+        const note =
+          notes.find(
+            n =>
+              n.id ===
+              button.dataset.noteMenu
+          );
+
+        if (!note) return;
+
+        openNoteDetail(note);
+      };
+    });
+}
+
+function openNoteDetail(note) {
+
+  $("noteDetailContent").innerHTML = `
+
+    <div class="dialog-head">
+
+      <div>
+
+        <div class="eyebrow">
+          NOTA
+        </div>
+
+        <h2>
+          ${note.pinned ? "📌 " : ""}
+          ${esc(note.title)}
+        </h2>
+
+      </div>
+
+      <button
+        class="close-btn"
+        id="closeNoteDetail"
+        type="button"
+      >
+        ×
+      </button>
+
+    </div>
+
+    <div
+      style="padding:0 20px 20px"
+    >
+
+      ${
+        note.text
+          ? `
+            <div class="note-detail">
+              ${esc(note.text)}
+            </div>
+          `
+          : ""
+      }
+
+      ${
+        note.link
+          ? `
+            <a
+              class="link-btn"
+              href="${esc(note.link)}"
+              target="_blank"
+              rel="noopener"
+            >
+              🔗 Abrir enlace
+            </a>
+          `
+          : ""
+      }
+
+      <div class="quick-actions">
+
+        <button
+          class="action-btn"
+          id="notePinBtn"
+          type="button"
+        >
+          ${
+            note.pinned
+              ? "📌 Quitar prioridad"
+              : "📌 Marcar como prioridad"
+          }
+        </button>
+
+        <button
+          class="action-btn"
+          id="noteEditBtn"
+          type="button"
+        >
+          Editar
+        </button>
+
+        <button
+          class="action-btn"
+          id="noteDeleteBtn"
+          type="button"
+        >
+          Eliminar
+        </button>
+
+      </div>
+
+    </div>
+  `;
+
+  $("noteDetailDialog").showModal();
+
+  $("closeNoteDetail").onclick = () =>
+    $("noteDetailDialog").close();
+
+  $("notePinBtn").onclick = () => {
+
+    const notes =
+      loadNotes();
+
+    const base =
+      notes.find(
+        n => n.id === note.id
+      );
+
+    if (base) {
+
+      base.pinned =
+        !base.pinned;
+
+      saveNotes(notes);
+    }
+
+    $("noteDetailDialog").close();
+
+    render();
+  };
+
+  $("noteEditBtn").onclick = () => {
+
+    $("noteDetailDialog").close();
+
+    openNoteEdit(note);
+  };
+
+  $("noteDeleteBtn").onclick = () => {
+
+    if (
+      !confirm(
+        "¿Eliminar esta nota?"
+      )
+    ) {
+      return;
+    }
+
+    saveNotes(
+      loadNotes().filter(
+        n => n.id !== note.id
+      )
+    );
+
+    $("noteDetailDialog").close();
+
+    render();
+  };
+}
+
+function openNoteEdit(note) {
+
+  $("noteDialogTitle").textContent =
+    "Editar nota";
+
+  $("noteTitle").value =
+    note.title;
+
+  $("noteText").value =
+    note.text || "";
+
+  $("noteLink").value =
+    note.link || "";
+
+  $("notePinned").checked =
+    !!note.pinned;
+
+  $("noteForm").dataset.editId =
+    note.id;
+
+  $("noteDialog").showModal();
+}
+
+/* =========================
    NAVEGACIÓN
 ========================= */
 
 $("prevDay").onclick = () => {
 
   selectedDate =
-    addDays(selectedDate, -1);
+    addDays(
+      selectedDate,
+      -1
+    );
 
   currentFilter =
     "today";
@@ -907,7 +1471,10 @@ $("prevDay").onclick = () => {
 $("nextDay").onclick = () => {
 
   selectedDate =
-    addDays(selectedDate, 1);
+    addDays(
+      selectedDate,
+      1
+    );
 
   currentFilter =
     "today";
@@ -916,7 +1483,9 @@ $("nextDay").onclick = () => {
 };
 
 document
-  .querySelectorAll(".filter[data-filter]")
+  .querySelectorAll(
+    ".filter[data-filter]"
+  )
   .forEach(b => {
 
     b.onclick = () => {
@@ -925,7 +1494,8 @@ document
         b.dataset.filter;
 
       if (
-        currentFilter === "today"
+        currentFilter ===
+        "today"
       ) {
         selectedDate =
           todayString();
@@ -933,8 +1503,27 @@ document
 
       render();
     };
-
   });
+
+/* =========================
+   MINI CALENDARIO DE FECHA
+========================= */
+
+$("datePickerBtn").onclick = () => {
+
+  browseMonth =
+    dateFromString(
+      selectedDate
+    );
+
+  $("calendarDialog")
+    .showModal();
+
+  renderBrowseCalendar();
+};
+
+$("closeCalendarDialog").onclick = () =>
+  $("calendarDialog").close();
 
 /* =========================
    AGREGAR PENDIENTE
@@ -947,28 +1536,42 @@ $("addBtn").onclick = () => {
   $("taskDate").value =
     selectedDate;
 
-  setCalendarFromDate(
-    selectedDate
-  );
+  const d =
+    dateFromString(
+      selectedDate
+    );
+
+  calendarMonth =
+    new Date(
+      d.getFullYear(),
+      d.getMonth(),
+      1
+    );
 
   renderCalendar();
 
-  $("taskDialog").showModal();
+  $("taskDialog")
+    .showModal();
 };
 
-$("closeDialog").onclick =
-  () =>
-    $("taskDialog").close();
+$("closeDialog").onclick = () =>
+  $("taskDialog").close();
 
 $("taskForm").onsubmit = e => {
 
   e.preventDefault();
 
+  e.stopPropagation();
+
   const task = {
-    id: crypto.randomUUID(),
+
+    id:
+      crypto.randomUUID(),
 
     title:
-      $("title").value.trim(),
+      $("title")
+        .value
+        .trim(),
 
     date:
       $("taskDate").value,
@@ -983,10 +1586,17 @@ $("taskForm").onsubmit = e => {
       $("reminder").value,
 
     status:
-      "pending"
+      "pending",
+
+    pinned:
+      false,
+
+    series:
+      null
   };
 
-  const a = load();
+  const a =
+    load();
 
   a.push(task);
 
@@ -1000,7 +1610,112 @@ $("taskForm").onsubmit = e => {
 
   $("taskForm").reset();
 
-  $("taskDialog").close();
+  $("taskDialog")
+    .close();
+
+  render();
+};
+
+/* =========================
+   AGREGAR / EDITAR NOTA
+========================= */
+
+$("addNoteBtn").onclick = () => {
+
+  $("noteDialogTitle")
+    .textContent =
+    "Nueva nota";
+
+  $("noteForm").reset();
+
+  delete $("noteForm")
+    .dataset.editId;
+
+  $("noteDialog")
+    .showModal();
+};
+
+$("closeNoteDialog").onclick = () =>
+  $("noteDialog").close();
+
+$("noteForm").onsubmit = e => {
+
+  e.preventDefault();
+
+  const notes =
+    loadNotes();
+
+  const editId =
+    $("noteForm")
+      .dataset
+      .editId;
+
+  if (editId) {
+
+    const note =
+      notes.find(
+        n => n.id === editId
+      );
+
+    if (note) {
+
+      note.title =
+        $("noteTitle")
+          .value
+          .trim();
+
+      note.text =
+        $("noteText")
+          .value
+          .trim();
+
+      note.link =
+        $("noteLink")
+          .value
+          .trim();
+
+      note.pinned =
+        $("notePinned")
+          .checked;
+    }
+
+  } else {
+
+    notes.push({
+
+      id:
+        crypto.randomUUID(),
+
+      title:
+        $("noteTitle")
+          .value
+          .trim(),
+
+      text:
+        $("noteText")
+          .value
+          .trim(),
+
+      link:
+        $("noteLink")
+          .value
+          .trim(),
+
+      pinned:
+        $("notePinned")
+          .checked
+    });
+  }
+
+  saveNotes(notes);
+
+  $("noteForm").reset();
+
+  delete $("noteForm")
+    .dataset.editId;
+
+  $("noteDialog")
+    .close();
 
   render();
 };
@@ -1009,15 +1724,15 @@ $("taskForm").onsubmit = e => {
    SETTINGS
 ========================= */
 
-$("settingsBtn").onclick =
-  () =>
-    alert(
-      "Aquí añadiremos después las notificaciones y el calendario compartido."
-    );
+$("settingsBtn").onclick = () =>
+  alert(
+    "Aquí añadiremos después las notificaciones y el calendario compartido."
+  );
 
 /* =========================
    INICIAR
 ========================= */
 
 seed();
+
 render();
