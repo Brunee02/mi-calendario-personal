@@ -1157,3 +1157,12 @@ $("settingsBtn").onclick = () =>
 
 seed();
 render();
+// Conectar botón para agregar notas
+const addNoteBtn = document.getElementById("addNoteBtn");
+const noteDialog = document.getElementById("noteDialog");
+
+if (addNoteBtn && noteDialog) {
+  addNoteBtn.addEventListener("click", () => {
+    noteDialog.showModal();
+  });
+}
