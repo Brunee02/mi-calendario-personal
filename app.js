@@ -404,8 +404,8 @@ function renderCalendar() {
       </strong>
 
       <div class="calendar-nav">
-        <button type="button" id="calPrev">‹</button>
-        <button type="button" id="calNext">›</button>
+        <button type="button" id="calPrev" aria-label="Mes anterior">‹</button>
+        <button type="button" id="calNext" aria-label="Mes siguiente">›</button>
       </div>
     </div>
 
@@ -420,6 +420,7 @@ function renderCalendar() {
 
   for (let i = 0; i < 42; i++) {
     const n = i - start + 1;
+
     let dt;
 
     if (n < 1) {
@@ -431,9 +432,15 @@ function renderCalendar() {
     }
 
     const ds = formatDate(dt);
-    const selected = ds === $("taskDate").value;
-    const muted = dt.getMonth() !== m;
-    const isToday = ds === todayString();
+
+    const selected =
+      ds === $("taskDate").value;
+
+    const muted =
+      dt.getMonth() !== m;
+
+    const isToday =
+      ds === todayString();
 
     h += `
       <button
@@ -446,32 +453,66 @@ function renderCalendar() {
     `;
   }
 
-  c.innerHTML = h + "</div>";
+  h += `</div>`;
 
-  $("calPrev").onclick = () => {
-    calendarMonth = new Date(y, m - 1, 1);
-    renderCalendar();
-  };
+  c.innerHTML = h;
 
-  $("calNext").onclick = () => {
-    calendarMonth = new Date(y, m + 1, 1);
-    renderCalendar();
-  };
+  // MES ANTERIOR
+  const prev = $("calPrev");
 
-  c.querySelectorAll(".calendar-day").forEach(b => {
-    b.onclick = () => {
-      $("taskDate").value = b.dataset.date;
-
-      const d = dateFromString(b.dataset.date);
+  if (prev) {
+    prev.addEventListener("click", function(e) {
+      e.preventDefault();
+      e.stopPropagation();
 
       calendarMonth = new Date(
-        d.getFullYear(),
-        d.getMonth(),
+        calendarMonth.getFullYear(),
+        calendarMonth.getMonth() - 1,
         1
       );
 
       renderCalendar();
-    };
+    });
+  }
+
+  // MES SIGUIENTE
+  const next = $("calNext");
+
+  if (next) {
+    next.addEventListener("click", function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      calendarMonth = new Date(
+        calendarMonth.getFullYear(),
+        calendarMonth.getMonth() + 1,
+        1
+      );
+
+      renderCalendar();
+    });
+  }
+
+  // SELECCIONAR FECHA
+  c.querySelectorAll(".calendar-day").forEach(button => {
+    button.addEventListener("click", function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const value = this.dataset.date;
+
+      $("taskDate").value = value;
+
+      const [year, month] = value.split("-").map(Number);
+
+      calendarMonth = new Date(
+        year,
+        month - 1,
+        1
+      );
+
+      renderCalendar();
+    });
   });
 }
 
