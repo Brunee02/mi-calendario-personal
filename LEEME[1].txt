@@ -1,0 +1,29 @@
+MI CALENDARIO PERSONAL — PRUEBA CON FINANZAS
+
+Archivos:
+- index.html
+- app.js
+- styles.css
+- sw.js
+
+Esta prueba parte de la versión del calendario que ya funcionaba en iPhone y añade:
+- Corrección de “Mañana · misma hora” para pendientes de una sola vez.
+- Módulo Finanzas independiente.
+- Ingresos y gastos.
+- Categorías y resumen mensual.
+- Metas de ahorro.
+- Consejos automáticos basados en tus datos (sin API de IA todavía).
+- Historial de movimientos.
+
+IMPORTANTE:
+1. Reemplaza los 4 archivos de tu proyecto por estos.
+2. Los datos del calendario y las notas existentes usan localStorage y deberían conservarse si mantienes el mismo dominio.
+3. Finanzas usa sus propias claves de localStorage.
+4. La parte de “Consejos inteligentes” es una primera versión local; no usa una API de IA ni necesita una clave.
+
+PRUEBA PRINCIPAL:
+- Crea un pendiente con “Una vez”.
+- Pulsa “Mañana · misma hora”.
+- Debe aparecer solamente mañana.
+- Comprueba pasado mañana y otros días.
+- Luego abre Finanzas y registra un ingreso y un gasto.

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#292622"><title>Mi Calendario Personal</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main class="app">
+<header class="topbar"><div><div class="eyebrow">MI CALENDARIO PERSONAL</div><h1 id="currentDate"></h1><p id="currentYear"></p></div><button class="ghost-btn" id="settingsBtn" type="button">•••</button></header>
+<section class="toolbar"><div class="search-wrap"><span>⌕</span><input id="searchInput" type="search" placeholder="Buscar pendientes y notas…"></div><button class="filter view-btn active" id="dayViewBtn" type="button">☰ Día</button><button class="filter view-btn" id="monthViewBtn" type="button">▦ Mes</button><button class="filter finance-btn" id="financeBtn" type="button">💰 Finanzas</button></section>
+<section class="navigation"><div class="day-buttons"><button id="prevDay" class="square-btn" type="button">‹</button><button id="nextDay" class="square-btn" type="button">›</button></div><div class="filters"><button data-filter="today" class="filter active" type="button">Hoy</button><button data-filter="future" class="filter" type="button">Próximos</button><button data-filter="past" class="filter" type="button">Pasados</button><button data-filter="all" class="filter" type="button">Todas</button><button id="datePickerBtn" class="filter" type="button">📅</button></div></section>
+<section id="monthSection" class="month-section hidden"><div class="section-title"><h2 id="monthTitle">CALENDARIO</h2><span id="monthTaskCount"></span></div><div class="calendar-picker month-calendar" id="monthCalendar"></div></section>
+<section class="notes-section"><div class="section-title"><h2>📌 IMPORTANTES</h2></div><div id="priorityList"></div></section>
+<section class="notes-section"><div class="section-title"><h2>📝 NOTAS</h2><button class="mini-add" id="addNoteBtn" type="button">＋</button></div><div id="notesList"></div></section>
+<section id="daySection"><div class="section-title"><h2 id="sectionTitle">PENDIENTES DE HOY</h2><span id="taskCount"></span></div><div class="category-filter-row"><select id="categoryFilter" class="compact-select"><option value="all">Todas las categorías</option></select><select id="priorityFilter" class="compact-select"><option value="all">Todas las prioridades</option><option value="high">Alta</option><option value="medium">Media</option><option value="low">Baja</option></select></div><div id="taskList"></div></section>
+</main>
+<button id="addBtn" class="add-btn" type="button">＋ Agregar pendiente</button>
+<dialog id="taskDialog" class="dialog"><div class="dialog-head"><div><div class="eyebrow">PENDIENTE</div><h2 id="taskDialogTitle">Agregar pendiente</h2></div><button class="close-btn" id="closeDialog" type="button">×</button></div><form id="taskForm"><label>¿Qué tienes que hacer?<input id="title" required placeholder="Ej. Enviar constancia"></label><label>Fecha<div class="calendar-picker" id="calendarPicker"></div><input id="taskDate" type="hidden" required></label><label>Hora<input id="taskTime" type="time" required></label><div class="form-grid"><label>Repetición<select id="repeat"><option value="once">Una vez</option><option value="daily">Todos los días</option><option value="weekdays">Lunes a viernes</option><option value="weekly">Cada semana</option></select></label><label>Prioridad<select id="taskPriority"><option value="low">Baja</option><option value="medium" selected>Media</option><option value="high">Alta</option></select></label></div><label>Categoría<input id="taskCategory" list="categoryOptions" placeholder="Ej. Trabajo, personal, estudio"><datalist id="categoryOptions"></datalist></label><label>Aviso<select id="reminder"><option value="10">10 minutos antes + a la hora</option><option value="5">5 minutos antes + a la hora</option><option value="15">15 minutos antes + a la hora</option><option value="30">30 minutos antes + a la hora</option><option value="0">Solo a la hora</option><option value="none">Sin aviso</option></select></label><label class="check-label"><input id="taskPinned" type="checkbox">📌 Marcar como prioridad</label><button class="primary-btn" type="submit">Guardar pendiente</button></form></dialog>
+<dialog id="taskDetailDialog" class="dialog"><div id="detailContent"></div></dialog>
+<dialog id="noteDialog" class="dialog"><div class="dialog-head"><div><div class="eyebrow">NOTAS</div><h2 id="noteDialogTitle">Nueva nota</h2></div><button class="close-btn" id="closeNoteDialog" type="button">×</button></div><form id="noteForm"><label>Título<input id="noteTitle" required placeholder="Ej. Link importante"></label><label>Nota<textarea id="noteText" rows="5" placeholder="Escribe algo que quieras guardar…"></textarea></label><label>Link (opcional)<input id="noteLink" type="url" placeholder="https://..."></label><label>Categoría<input id="noteCategory" list="categoryOptions" placeholder="Ej. Ideas"></label><label class="check-label"><input id="notePinned" type="checkbox">📌 Marcar como prioridad</label><button class="primary-btn" type="submit">Guardar nota</button></form></dialog>
+<dialog id="noteDetailDialog" class="dialog"><div id="noteDetailContent"></div></dialog>
+<dialog id="calendarDialog" class="dialog"><div class="dialog-head"><div><div class="eyebrow">CALENDARIO</div><h2>Elegir fecha</h2></div><button class="close-btn" id="closeCalendarDialog" type="button">×</button></div><div class="calendar-picker browse-calendar" id="browseCalendar"></div></dialog>
+<dialog id="settingsDialog" class="dialog"><div class="dialog-head"><div><div class="eyebrow">CONFIGURACIÓN</div><h2>Mi calendario</h2></div><button class="close-btn" id="closeSettings" type="button">×</button></div><div class="settings-body"><button class="settings-card" id="notificationBtn" type="button"><span class="settings-icon">🔔</span><span><b id="notificationTitle">Activar notificaciones</b><small id="notificationStatus">Avisos del navegador para tus pendientes.</small></span></button><button class="settings-card" id="statsBtn" type="button"><span class="settings-icon">📊</span><span><b>Ver resumen</b><small>Completados, pendientes y prioridades.</small></span></button><button class="settings-card" id="clearCompletedBtn" type="button"><span class="settings-icon">🧹</span><span><b>Limpiar completados</b><small>Elimina pendientes de una sola vez ya realizados.</small></span></button><p class="settings-note">Tus datos se guardan localmente en este navegador. Otra persona que abra la misma página en otro navegador tendrá su propio calendario.</p></div></dialog>
+<dialog id="statsDialog" class="dialog"><div class="dialog-head"><div><div class="eyebrow">RESUMEN</div><h2>Tu calendario</h2></div><button class="close-btn" id="closeStats" type="button">×</button></div><div id="statsContent" class="stats-grid"></div></dialog>
+
+<dialog id="financeDialog" class="dialog finance-dialog">
+  <div class="dialog-head">
+    <div><div class="eyebrow">MI DINERO</div><h2>Finanzas</h2></div>
+    <button class="close-btn" id="closeFinance" type="button">×</button>
+  </div>
+  <div class="finance-body">
+    <div class="finance-monthbar"><button class="square-btn" id="financePrev" type="button">‹</button><strong id="financeMonth"></strong><button class="square-btn" id="financeNext" type="button">›</button></div>
+    <div class="money-hero"><span>Disponible este mes</span><strong id="financeBalance">S/ 0.00</strong><small id="financeBalanceMeta">Ingresos menos gastos</small></div>
+    <div class="finance-stats"><div><span>Ingresos</span><strong id="financeIncome">S/ 0.00</strong></div><div><span>Gastos</span><strong id="financeExpense">S/ 0.00</strong></div><div><span>Ahorro</span><strong id="financeSavings">0%</strong></div></div>
+    <div class="finance-actions"><button class="primary-btn" id="addExpenseBtn" type="button">＋ Registrar gasto</button><button class="secondary-btn" id="addIncomeBtn" type="button">＋ Registrar ingreso</button></div>
+    <section class="finance-card"><div class="finance-card-head"><h3>Gastos por categoría</h3><span id="financeTopCategory"></span></div><div id="financeCategories"></div></section>
+    <section class="finance-card"><div class="finance-card-head"><h3>Metas de ahorro</h3><button class="mini-add" id="addGoalBtn" type="button">＋</button></div><div id="financeGoals"></div></section>
+    <section class="finance-card ai-card"><div class="finance-card-head"><h3>✨ Consejos inteligentes</h3></div><div id="financeAdvice"></div><small class="ai-note">Consejos automáticos basados en tus propios datos. Más adelante podemos conectarlos a una IA real.</small></section>
+    <section class="finance-card"><div class="finance-card-head"><h3>Últimos movimientos</h3></div><div id="financeTransactions"></div></section>
+  </div>
+</dialog>
+
+<dialog id="financeEntryDialog" class="dialog">
+  <div class="dialog-head"><div><div class="eyebrow" id="financeEntryEyebrow">FINANZAS</div><h2 id="financeEntryTitle">Registrar gasto</h2></div><button class="close-btn" id="closeFinanceEntry" type="button">×</button></div>
+  <form id="financeEntryForm">
+    <label>Monto<input id="financeAmount" type="number" min="0.01" step="0.01" inputmode="decimal" required placeholder="0.00"></label>
+    <label>Descripción<input id="financeDescription" required placeholder="Ej. Supermercado"></label>
+    <label>Categoría<input id="financeCategory" list="financeCategoryOptions" required placeholder="Ej. Comida"><datalist id="financeCategoryOptions"><option value="Comida"><option value="Vivienda"><option value="Transporte"><option value="Mascota"><option value="Salud"><option value="Entretenimiento"><option value="Compras"><option value="Educación"><option value="Deudas"><option value="Ahorro"><option value="Otros"></datalist></label>
+    <label>Fecha<input id="financeDate" type="date" required></label>
+    <button class="primary-btn" type="submit">Guardar movimiento</button>
+  </form>
+</dialog>
+
+<dialog id="goalDialog" class="dialog">
+  <div class="dialog-head"><div><div class="eyebrow">AHORRO</div><h2>Nueva meta</h2></div><button class="close-btn" id="closeGoal" type="button">×</button></div>
+  <form id="goalForm">
+    <label>Meta<input id="goalName" required placeholder="Ej. Viaje"></label>
+    <label>Monto objetivo<input id="goalTarget" type="number" min="1" step="0.01" inputmode="decimal" required placeholder="3000"></label>
+    <label>Ya tengo<input id="goalSaved" type="number" min="0" step="0.01" inputmode="decimal" value="0" placeholder="0"></label>
+    <button class="primary-btn" type="submit">Crear meta</button>
+  </form>
+</dialog>
+<script src="app.js"></script><script>if('serviceWorker' in navigator&&location.protocol==='https:'){navigator.serviceWorker.register('./sw.js').catch(()=>{});}</script>
+</body></html>
