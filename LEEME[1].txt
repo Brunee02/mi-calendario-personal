@@ -1,0 +1,54 @@
+MI CALENDARIO PERSONAL — PRUEBA CON FINANZAS + DEUDAS
+
+Esta versión parte de la prueba anterior y añade una sección completa de DEUDAS.
+
+DEUDAS
+- Registrar deuda: nombre, tipo, monto original, saldo pendiente, pago mínimo, vencimiento y nota.
+- Ver deuda total pendiente.
+- Aviso de vencimientos dentro de 7 días.
+- Barra de progreso de pago.
+- Registrar pagos.
+- Cada pago reduce el saldo de la deuda y se registra automáticamente como gasto en la categoría “Deudas”.
+- Editar y eliminar deudas.
+- Eliminar una deuda NO elimina los movimientos de pago ya registrados.
+
+FINANZAS
+- Ingresos y gastos por mes.
+- Disponible del mes.
+- Porcentaje de ahorro.
+- Gastos por categoría.
+- Metas de ahorro.
+- Consejos automáticos basados en los datos locales.
+- Historial de movimientos.
+
+CALENDARIO
+- Mantiene calendario de iPhone, notas, prioridades, repetición, filtros y notificaciones.
+- “Mañana · misma hora” para una tarea de una sola vez mueve el registro original y mantiene repeat=once.
+
+IMPORTANTE
+- Los datos se guardan localmente en el navegador mediante localStorage.
+- La nueva sección de deudas usa su propia clave: mi_calendario_finance_debts_v1.
+- Los pagos de deuda sí afectan el resumen mensual porque se guardan como gastos.
+- Registrar una deuda no cuenta como gasto automáticamente: la deuda representa el saldo que debes; el gasto aparece cuando registras el pago.
+- El service worker usa una nueva versión de caché para evitar que el iPhone cargue archivos antiguos.
+
+PRUEBA RECOMENDADA
+1. Crear una tarea “Una vez” y probar “Mañana · misma hora”.
+2. Crear una nota y pinearla.
+3. Abrir Finanzas.
+4. Registrar un ingreso.
+5. Registrar un gasto.
+6. Crear una deuda de prueba (por ejemplo, total S/ 1,000 y saldo S/ 700).
+7. Registrar un pago de S/ 100.
+8. Comprobar que la deuda queda en S/ 600 y que aparece un gasto “Pago de deuda” por S/ 100.
+9. Probar un vencimiento dentro de 7 días para ver el aviso.
+10. Probar editar y eliminar la deuda.
+
+
+NUEVA VISTA HORARIO:
+- Vista por horas de 06:00 a 24:00.
+- Muestra pendientes con bloques y duración.
+- Calcula y muestra espacios libres.
+- Tocar un espacio libre abre Agregar pendiente con la hora prellenada.
+- Se puede navegar entre días con las flechas.
+- Las tareas antiguas sin duración usan 30 minutos por defecto.
